@@ -1,0 +1,6 @@
+[submodule "external/NanoLog"]
+	path = external/NanoLog
+	url = https://github.com/PlatformLab/NanoLog.git
+[submodule "external/backward-cpp"]
+	path = external/backward-cpp
+	url = https://github.com/bombela/backward-cpp.git
