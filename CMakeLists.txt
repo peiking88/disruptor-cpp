@@ -34,13 +34,7 @@ option(DISRUPTOR_BUILD_TESTS "Build unit tests" ON)
 option(DISRUPTOR_BUILD_BENCHMARKS "Build benchmarks" ON)
 
 if (DISRUPTOR_BUILD_TESTS)
-  include(FetchContent)
-  FetchContent_Declare(
-    Catch2
-    GIT_REPOSITORY https://bgithub.xyz/catchorg/Catch2.git
-    GIT_TAG v3.5.2
-  )
-  FetchContent_MakeAvailable(Catch2)
+  add_subdirectory(external/Catch2 EXCLUDE_FROM_ALL)
 
   add_executable(disruptor_tests
     tests/test_sequence.cpp

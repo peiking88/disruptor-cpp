@@ -4,3 +4,6 @@
 [submodule "external/backward-cpp"]
 	path = external/backward-cpp
 	url = https://bgithub.xyz/bombela/backward-cpp.git
+[submodule "external/Catch2"]
+	path = external/Catch2
+	url = https://bgithub.xyz/catchorg/Catch2.git

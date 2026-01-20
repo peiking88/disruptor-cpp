@@ -16,10 +16,9 @@
 
 - CMake >= 3.20
 - C++23 compiler (e.g., GCC 13+ / Clang 16+)
-- Git (for FetchContent to pull Catch2 during test builds)
-- Submodules: `external/NanoLog`, `external/backward-cpp` (logging & stack trace for exception handling)
+- Git (submodules: `external/Catch2`, `external/NanoLog`, `external/backward-cpp`)
 
-> Note: Catch2 is still fetched via CMake FetchContent. Initialize submodules before build:
+> Initialize submodules before build:
 > `git submodule update --init --recursive`
 
 ## Build
@@ -43,7 +42,7 @@ cmake --build build -j$(nproc)
 
 ## Latest Benchmark Result (current build with exception/log integration)
 
-- `disruptor_benchmark`: 1.61603e+08 events/s
+- `disruptor_benchmark`: 1.34499e+08 events/s
 
 ## C++ Benchmark Results (current)
 
@@ -51,33 +50,33 @@ cmake --build build -j$(nproc)
 
 - `SingleProducerSingleConsumer`:
   - Iterations: 10,000,000
-  - Time(s): 0.0445689
-  - Throughput(ops/s): 2.24372e+08
-  - Average(ns/op): 4.45689
+  - Time(s): 0.0439001
+  - Throughput(ops/s): 2.27790e+08
+  - Average(ns/op): 4.39001
 - `MultiProducerSingleConsumer`:
   - Producers: 4
   - Iterations per producer: 10,000,000
-  - Time(s): 0.726736
-  - Throughput(ops/s): 5.50406e+07
+  - Time(s): 0.706818
+  - Throughput(ops/s): 5.65916e+07
 - `Sequence` vs `std::atomic` (ns/op, ops/s):
-  - Atomic get: 0.183117 ns/op, 5.46098e+09 ops/s
-  - Atomic set: 0.0920509 ns/op, 1.08636e+10 ops/s
-  - Atomic getAndAdd: 3.50078 ns/op, 2.8565e+08 ops/s
-  - Sequence get: 0.178477 ns/op, 5.60295e+09 ops/s
-  - Sequence set: 0.179053 ns/op, 5.58493e+09 ops/s
-  - Sequence incrementAndGet: 3.47828 ns/op, 2.87498e+08 ops/s
+  - Atomic get: 0.179859 ns/op, 5.55992e+09 ops/s
+  - Atomic set: 0.090708 ns/op, 1.10244e+10 ops/s
+  - Atomic getAndAdd: 3.50266 ns/op, 2.85497e+08 ops/s
+  - Sequence get: 0.17926 ns/op, 5.57849e+09 ops/s
+  - Sequence set: 0.180906 ns/op, 5.52773e+09 ops/s
+  - Sequence incrementAndGet: 3.50202 ns/op, 2.8555e+08 ops/s
 
 ### PerfTest-style (C++ equivalents)
 
 - `OneToOneSequencedThroughputTest`:
   - Iterations: 10,000,000
-  - Time(s): 0.0728422
-  - Throughput(ops/s): 1.37283e+08
+  - Time(s): 0.0720616
+  - Throughput(ops/s): 1.38770e+08
 - `ThreeToOneSequencedThroughputTest`:
   - Producers: 3
   - Iterations: 20,000,000
-  - Time(s): 0.552405
-  - Throughput(ops/s): 3.62053e+07
+  - Time(s): 0.602149
+  - Throughput(ops/s): 3.32143e+07
 
 ## Exception Handling & Logging
 
@@ -92,8 +91,8 @@ cmake --build build -j$(nproc)
 
 ## C++ vs Java (rough, non-like-for-like)
 
-- C++ SPSC: 4.45689 ns/op (2.24e+08 ops/s) vs Java 5.8539 ns/op ⇒ C++ faster ~31% (ns/op basis).
-- C++ MPSC (4p1c): 5.50406e+07 ops/s vs Java 3.82e+07 ops/s ⇒ C++ faster ~44%.
+- C++ SPSC: 4.39001 ns/op (2.2779e+08 ops/s) vs Java 5.8539 ns/op ⇒ C++ faster ~25% (ns/op basis).
+- C++ MPSC (4p1c): 5.65916e+07 ops/s vs Java 3.82e+07 ops/s ⇒ C++ faster ~48%.
 
 Notes: Different languages/runtime/harness; numbers are indicative only.
 
@@ -101,10 +100,10 @@ Notes: Different languages/runtime/harness; numbers are indicative only.
 
 | Benchmark | Current | Previous baseline | Change |
 | --- | ---: | ---: | ---: |
-| disruptor_benchmark (events/s) | 1.61603e+08 | 1.3328e+08 | **+21.3%** |
-| jmh_spsc (ops/s) | 2.24372e+08 | 2.25045e+08 | **-0.3%** |
-| jmh_mpsc (ops/s) | 5.50406e+07 | 5.17231e+07 | **+6.4%** |
-| perf_one_to_one (ops/s) | 1.37283e+08 | 1.37592e+08 | **-0.2%** |
-| perf_three_to_one (ops/s) | 3.62053e+07 | 4.3282e+07 | **-16.4%** |
+| disruptor_benchmark (events/s) | 1.34499e+08 | 1.3328e+08 | **+0.9%** |
+| jmh_spsc (ops/s) | 2.27790e+08 | 2.25045e+08 | **+1.2%** |
+| jmh_mpsc (ops/s) | 5.65916e+07 | 5.17231e+07 | **+9.4%** |
+| perf_one_to_one (ops/s) | 1.38770e+08 | 1.37592e+08 | **+0.9%** |
+| perf_three_to_one (ops/s) | 3.32143e+07 | 4.3282e+07 | **-23.2%** |
 
-Notes: Three-producer path regressed; others improved or flat. Three-producer regression likely due to added exception-handling hot-path overhead and MPSC contention; consider A/B with lightweight handler or bypass catch in fast path if needed.
+Notes: 三生产者路径仍显著回落；其他项目小幅提升或持平。可对三生产者场景做异常捕获热路径的 A/B 优化验证。
