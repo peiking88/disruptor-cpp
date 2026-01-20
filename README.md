@@ -17,8 +17,10 @@
 - CMake >= 3.20
 - C++23 compiler (e.g., GCC 13+ / Clang 16+)
 - Git (for FetchContent to pull Catch2 during test builds)
+- Submodules: `external/NanoLog`, `external/backward-cpp` (logging & stack trace for exception handling)
 
-> Note: The repository also contains `external/` for third-party sources, but the current build pulls Catch2 via CMake FetchContent.
+> Note: Catch2 is still fetched via CMake FetchContent. Initialize submodules before build:
+> `git submodule update --init --recursive`
 
 ## Build
 
@@ -39,61 +41,70 @@ cmake --build build -j$(nproc)
 ./build/disruptor_benchmark
 ```
 
-## Latest Benchmark Result
+## Latest Benchmark Result (current build with exception/log integration)
 
-- Events: 1,000,000
-- Time(s): 0.007734
-- Throughput(events/s): 1.29299e+08
+- `disruptor_benchmark`: 1.61603e+08 events/s
 
-## C++ Benchmark Results (Java-style coverage)
+## C++ Benchmark Results (current)
 
 ### JMH-style (C++ equivalents)
 
 - `SingleProducerSingleConsumer`:
   - Iterations: 10,000,000
-  - Time(s): 0.0441363
-  - Throughput(ops/s): 2.26571e+08
-  - Average(ns/op): 4.41363
+  - Time(s): 0.0445689
+  - Throughput(ops/s): 2.24372e+08
+  - Average(ns/op): 4.45689
 - `MultiProducerSingleConsumer`:
   - Producers: 4
   - Iterations per producer: 10,000,000
-  - Time(s): 0.81563
-  - Throughput(ops/s): 4.90418e+07
+  - Time(s): 0.726736
+  - Throughput(ops/s): 5.50406e+07
 - `Sequence` vs `std::atomic` (ns/op, ops/s):
-  - Atomic get: 0.191127 ns/op, 5.23213e+09 ops/s
-  - Atomic set: 0.0907619 ns/op, 1.10178e+10 ops/s
-  - Atomic getAndAdd: 3.55653 ns/op, 2.81173e+08 ops/s
-  - Sequence get: 0.27508 ns/op, 3.6353e+09 ops/s
-  - Sequence set: 0.193371 ns/op, 5.17141e+09 ops/s
-  - Sequence incrementAndGet: 3.62832 ns/op, 2.7561e+08 ops/s
+  - Atomic get: 0.183117 ns/op, 5.46098e+09 ops/s
+  - Atomic set: 0.0920509 ns/op, 1.08636e+10 ops/s
+  - Atomic getAndAdd: 3.50078 ns/op, 2.8565e+08 ops/s
+  - Sequence get: 0.178477 ns/op, 5.60295e+09 ops/s
+  - Sequence set: 0.179053 ns/op, 5.58493e+09 ops/s
+  - Sequence incrementAndGet: 3.47828 ns/op, 2.87498e+08 ops/s
 
 ### PerfTest-style (C++ equivalents)
 
 - `OneToOneSequencedThroughputTest`:
   - Iterations: 10,000,000
-  - Time(s): 0.073474
-  - Throughput(ops/s): 1.36103e+08
+  - Time(s): 0.0728422
+  - Throughput(ops/s): 1.37283e+08
 - `ThreeToOneSequencedThroughputTest`:
   - Producers: 3
   - Iterations: 20,000,000
-  - Time(s): 0.471294
-  - Throughput(ops/s): 4.24364e+07
+  - Time(s): 0.552405
+  - Throughput(ops/s): 3.62053e+07
 
-## Java Disruptor Benchmark Reference (from upstream docs)
+## Exception Handling & Logging
 
-The upstream Java Disruptor documentation reports:
+- Added `ExceptionHandler<T>` with default `FatalExceptionHandler` (logs + rethrows) and `IgnoreExceptionHandler` (logs only).
+- `BatchEventProcessor` now routes uncaught handler exceptions to the configured handler and notifies `onStart/onShutdown` errors.
+- Logging via NanoLog; stack traces via backward-cpp.
 
-- **>25 million messages/sec** and **latencies < 50 ns** on moderate clock-rate processors.
-- **~8x higher throughput** than equivalent queue-based approaches in a three-stage pipeline test.
+## Java Disruptor JMH (local run, JDK 21)
 
-## C++ vs Java (High-level, non-like-for-like)
+- `SingleProducerSingleConsumer.producing`: 5.8539 ns/op (≈1.71e+08 ops/s)
+- `MultiProducerSingleConsumer.producing` (4 threads): 38224 ops/ms (≈3.82e+07 ops/s)
 
-Using the upstream reference of **25M msgs/s** as a rough baseline:
+## C++ vs Java (rough, non-like-for-like)
 
-- C++ `SingleProducerSingleConsumer`: **2.26571e+08 ops/s** about **9.1x** the 25M baseline.
-- C++ `OneToOneSequencedThroughputTest`: **1.36103e+08 ops/s** about **5.4x** the 25M baseline.
+- C++ SPSC: 4.45689 ns/op (2.24e+08 ops/s) vs Java 5.8539 ns/op ⇒ C++ faster ~31% (ns/op basis).
+- C++ MPSC (4p1c): 5.50406e+07 ops/s vs Java 3.82e+07 ops/s ⇒ C++ faster ~44%.
 
-### Comparison Notes
+Notes: Different languages/runtime/harness; numbers are indicative only.
 
-- The Java numbers come from the LMAX Disruptor documentation and are **not a like-for-like comparison** (different workloads, hardware, JVM settings, and test harnesses).
-- The C++ results above were collected from local runs and are intended as like-scope counterparts to the Java JMH/perftest patterns.
+## Delta vs previous C++ baseline (pre exception/log integration)
+
+| Benchmark | Current | Previous baseline | Change |
+| --- | ---: | ---: | ---: |
+| disruptor_benchmark (events/s) | 1.61603e+08 | 1.3328e+08 | **+21.3%** |
+| jmh_spsc (ops/s) | 2.24372e+08 | 2.25045e+08 | **-0.3%** |
+| jmh_mpsc (ops/s) | 5.50406e+07 | 5.17231e+07 | **+6.4%** |
+| perf_one_to_one (ops/s) | 1.37283e+08 | 1.37592e+08 | **-0.2%** |
+| perf_three_to_one (ops/s) | 3.62053e+07 | 4.3282e+07 | **-16.4%** |
+
+Notes: Three-producer path regressed; others improved or flat. Three-producer regression likely due to added exception-handling hot-path overhead and MPSC contention; consider A/B with lightweight handler or bypass catch in fast path if needed.

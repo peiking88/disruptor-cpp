@@ -1,10 +1,12 @@
 #pragma once
 
 #include <atomic>
+#include <exception>
 #include <thread>
 
 #include "event_handler.h"
 #include "event_processor.h"
+#include "exception_handler.h"
 #include "ring_buffer.h"
 #include "sequence.h"
 #include "sequence_barrier.h"
@@ -20,31 +22,59 @@ public:
     {
     }
 
+    void setExceptionHandler(ExceptionHandler<T>& handler)
+    {
+        exceptionHandler = &handler;
+    }
+
     void run() override
     {
         running.store(true, std::memory_order_release);
-        long nextSequence = sequence.get() + 1;
+        barrier.clearAlert();
+        notifyStart();
 
-        while (running.load(std::memory_order_acquire))
+        try
         {
-            try
+            long nextSequence = sequence.get() + 1;
+            T* event = nullptr;
+
+            while (running.load(std::memory_order_acquire))
             {
-                long available = barrier.waitFor(nextSequence);
-                for (long seq = nextSequence; seq <= available; ++seq)
+                try
                 {
-                    handler.onEvent(ringBuffer.get(seq), seq, seq == available);
+                    long available = barrier.waitFor(nextSequence);
+                    for (long seq = nextSequence; seq <= available; ++seq)
+                    {
+                        event = &ringBuffer.get(seq);
+                        handler.onEvent(*event, seq, seq == available);
+                    }
+                    sequence.set(available);
+                    nextSequence = available + 1;
                 }
-                sequence.set(available);
-                nextSequence = available + 1;
-            }
-            catch (const AlertException&)
-            {
-                if (!running.load(std::memory_order_acquire))
+                catch (const AlertException&)
                 {
-                    break;
+                    if (!running.load(std::memory_order_acquire))
+                    {
+                        break;
+                    }
+                }
+                catch (...)
+                {
+                    handleEventException(std::current_exception(), nextSequence, event);
+                    sequence.set(nextSequence);
+                    ++nextSequence;
                 }
             }
         }
+        catch (...)
+        {
+            notifyShutdown();
+            running.store(false, std::memory_order_release);
+            throw;
+        }
+
+        notifyShutdown();
+        running.store(false, std::memory_order_release);
     }
 
     void halt() override
@@ -64,9 +94,44 @@ public:
     }
 
 private:
+    void notifyStart()
+    {
+        try
+        {
+            handler.onStart();
+        }
+        catch (...)
+        {
+            getExceptionHandler().handleOnStartException(std::current_exception());
+        }
+    }
+
+    void notifyShutdown()
+    {
+        try
+        {
+            handler.onShutdown();
+        }
+        catch (...)
+        {
+            getExceptionHandler().handleOnShutdownException(std::current_exception());
+        }
+    }
+
+    void handleEventException(std::exception_ptr exception, long sequence, T* event)
+    {
+        getExceptionHandler().handleEventException(exception, sequence, event);
+    }
+
+    ExceptionHandler<T>& getExceptionHandler()
+    {
+        return exceptionHandler ? *exceptionHandler : ExceptionHandlers<T>::defaultHandler();
+    }
+
     RingBuffer<T>& ringBuffer;
     SequenceBarrier& barrier;
     EventHandler<T>& handler;
+    ExceptionHandler<T>* exceptionHandler{nullptr};
     Sequence sequence{Sequence::INITIAL_VALUE};
     std::atomic<bool> running{false};
 };
