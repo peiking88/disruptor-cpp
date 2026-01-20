@@ -42,7 +42,7 @@ cmake --build build -j$(nproc)
 
 ## Latest Benchmark Result (current build with exception/log integration)
 
-- `disruptor_benchmark`: 1.34499e+08 events/s
+- `disruptor_benchmark`: 1.56152e+08 events/s
 
 ## C++ Benchmark Results (current)
 
@@ -50,33 +50,33 @@ cmake --build build -j$(nproc)
 
 - `SingleProducerSingleConsumer`:
   - Iterations: 10,000,000
-  - Time(s): 0.0439001
-  - Throughput(ops/s): 2.27790e+08
-  - Average(ns/op): 4.39001
+  - Time(s): 0.0438315
+  - Throughput(ops/s): 2.28147e+08
+  - Average(ns/op): 4.38315
 - `MultiProducerSingleConsumer`:
   - Producers: 4
   - Iterations per producer: 10,000,000
-  - Time(s): 0.706818
-  - Throughput(ops/s): 5.65916e+07
+  - Time(s): 0.725698
+  - Throughput(ops/s): 5.51193e+07
 - `Sequence` vs `std::atomic` (ns/op, ops/s):
-  - Atomic get: 0.179859 ns/op, 5.55992e+09 ops/s
-  - Atomic set: 0.090708 ns/op, 1.10244e+10 ops/s
-  - Atomic getAndAdd: 3.50266 ns/op, 2.85497e+08 ops/s
-  - Sequence get: 0.17926 ns/op, 5.57849e+09 ops/s
-  - Sequence set: 0.180906 ns/op, 5.52773e+09 ops/s
-  - Sequence incrementAndGet: 3.50202 ns/op, 2.8555e+08 ops/s
+  - Atomic get: 0.187312 ns/op, 5.3387e+09 ops/s
+  - Atomic set: 0.0899629 ns/op, 1.11157e+10 ops/s
+  - Atomic getAndAdd: 3.47998 ns/op, 2.87358e+08 ops/s
+  - Sequence get: 0.177301 ns/op, 5.64013e+09 ops/s
+  - Sequence set: 0.177778 ns/op, 5.62498e+09 ops/s
+  - Sequence incrementAndGet: 3.46064 ns/op, 2.88964e+08 ops/s
 
 ### PerfTest-style (C++ equivalents)
 
 - `OneToOneSequencedThroughputTest`:
   - Iterations: 10,000,000
-  - Time(s): 0.0720616
-  - Throughput(ops/s): 1.38770e+08
+  - Time(s): 0.0721252
+  - Throughput(ops/s): 1.38648e+08
 - `ThreeToOneSequencedThroughputTest`:
   - Producers: 3
   - Iterations: 20,000,000
-  - Time(s): 0.602149
-  - Throughput(ops/s): 3.32143e+07
+  - Time(s): 0.482466
+  - Throughput(ops/s): 4.14537e+07
 
 ## Exception Handling & Logging
 
@@ -91,8 +91,8 @@ cmake --build build -j$(nproc)
 
 ## C++ vs Java (rough, non-like-for-like)
 
-- C++ SPSC: 4.39001 ns/op (2.2779e+08 ops/s) vs Java 5.8539 ns/op ⇒ C++ faster ~25% (ns/op basis).
-- C++ MPSC (4p1c): 5.65916e+07 ops/s vs Java 3.82e+07 ops/s ⇒ C++ faster ~48%.
+- C++ SPSC: 4.38315 ns/op (2.28147e+08 ops/s) vs Java 5.8539 ns/op ⇒ C++ faster ~25% (ns/op basis).
+- C++ MPSC (4p1c): 5.51193e+07 ops/s vs Java 3.82e+07 ops/s ⇒ C++ faster ~44%.
 
 Notes: Different languages/runtime/harness; numbers are indicative only.
 
@@ -100,10 +100,10 @@ Notes: Different languages/runtime/harness; numbers are indicative only.
 
 | Benchmark | Current | Previous baseline | Change |
 | --- | ---: | ---: | ---: |
-| disruptor_benchmark (events/s) | 1.34499e+08 | 1.3328e+08 | **+0.9%** |
-| jmh_spsc (ops/s) | 2.27790e+08 | 2.25045e+08 | **+1.2%** |
-| jmh_mpsc (ops/s) | 5.65916e+07 | 5.17231e+07 | **+9.4%** |
-| perf_one_to_one (ops/s) | 1.38770e+08 | 1.37592e+08 | **+0.9%** |
-| perf_three_to_one (ops/s) | 3.32143e+07 | 4.3282e+07 | **-23.2%** |
+| disruptor_benchmark (events/s) | 1.56152e+08 | 1.3328e+08 | **+17.1%** |
+| jmh_spsc (ops/s) | 2.28147e+08 | 2.25045e+08 | **+1.4%** |
+| jmh_mpsc (ops/s) | 5.51193e+07 | 5.17231e+07 | **+6.6%** |
+| perf_one_to_one (ops/s) | 1.38648e+08 | 1.37592e+08 | **+0.8%** |
+| perf_three_to_one (ops/s) | 4.14537e+07 | 4.3282e+07 | **-4.2%** |
 
-Notes: 三生产者路径仍显著回落；其他项目小幅提升或持平。可对三生产者场景做异常捕获热路径的 A/B 优化验证。
+Notes: 三生产者路径已回升，仍略低于旧基线；其余项目持平或有不同幅度提升。

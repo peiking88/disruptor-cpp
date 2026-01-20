@@ -1,9 +1,9 @@
 [submodule "external/NanoLog"]
 	path = external/NanoLog
-	url = https://bgithub.xyz/PlatformLab/NanoLog.git
+	url = https://bgithub.xyz/peiking88/NanoLog
 [submodule "external/backward-cpp"]
 	path = external/backward-cpp
-	url = https://bgithub.xyz/bombela/backward-cpp.git
+	url = https://bgithub.xyz/peiking88/backward-cpp
 [submodule "external/Catch2"]
 	path = external/Catch2
 	url = https://bgithub.xyz/catchorg/Catch2.git
