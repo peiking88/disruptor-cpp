@@ -40,6 +40,14 @@ if (DISRUPTOR_BUILD_TESTS)
     tests/test_sequence.cpp
     tests/test_single_producer.cpp
     tests/test_multi_producer.cpp
+    tests/test_exception_and_lifecycle.cpp
+    tests/test_stress_multi_producer.cpp
+    tests/test_ring_buffer.cpp
+    tests/test_sequence_barrier.cpp
+    tests/test_wait_strategy.cpp
+    tests/test_sequencer.cpp
+    tests/test_batch_event_processor.cpp
+    tests/test_util.cpp
   )
   target_link_libraries(disruptor_tests PRIVATE disruptor Catch2::Catch2WithMain)
   enable_testing()
@@ -52,12 +60,34 @@ if (DISRUPTOR_BUILD_BENCHMARKS)
   add_executable(disruptor_jmh_mpsc benchmarks/jmh_multi_producer.cpp)
   add_executable(disruptor_jmh_sequence benchmarks/jmh_sequence.cpp)
   add_executable(disruptor_perf_one_to_one benchmarks/perftest_one_to_one.cpp)
+  add_executable(disruptor_perf_one_to_one_batch benchmarks/perftest_one_to_one_batch.cpp)
+  add_executable(disruptor_perf_one_to_three benchmarks/perftest_one_to_three.cpp)
+  add_executable(disruptor_perf_one_to_three_pipeline benchmarks/perftest_one_to_three_pipeline.cpp)
+  add_executable(disruptor_perf_one_to_three_diamond benchmarks/perftest_one_to_three_diamond.cpp)
   add_executable(disruptor_perf_three_to_one benchmarks/perftest_three_to_one.cpp)
+  add_executable(disruptor_perf_three_to_one_batch benchmarks/perftest_three_to_one_batch.cpp)
+  add_executable(disruptor_perf_three_to_three benchmarks/perftest_three_to_three.cpp)
+  add_executable(disruptor_perf_ping_pong benchmarks/perftest_ping_pong_latency.cpp)
+  add_executable(disruptor_perf_one_to_one_raw benchmarks/perftest_one_to_one_raw.cpp)
+  add_executable(disruptor_benchmark_analysis benchmarks/benchmark_analysis.cpp)
+  add_executable(disruptor_benchmark_deep benchmarks/benchmark_deep_analysis.cpp)
+  add_executable(disruptor_perf_batch_throughput benchmarks/perftest_batch_throughput.cpp)
 
   target_link_libraries(disruptor_benchmark PRIVATE disruptor)
   target_link_libraries(disruptor_jmh_spsc PRIVATE disruptor)
   target_link_libraries(disruptor_jmh_mpsc PRIVATE disruptor)
   target_link_libraries(disruptor_jmh_sequence PRIVATE disruptor)
   target_link_libraries(disruptor_perf_one_to_one PRIVATE disruptor)
+  target_link_libraries(disruptor_perf_one_to_one_batch PRIVATE disruptor)
+  target_link_libraries(disruptor_perf_one_to_three PRIVATE disruptor)
+  target_link_libraries(disruptor_perf_one_to_three_pipeline PRIVATE disruptor)
+  target_link_libraries(disruptor_perf_one_to_three_diamond PRIVATE disruptor)
   target_link_libraries(disruptor_perf_three_to_one PRIVATE disruptor)
+  target_link_libraries(disruptor_perf_three_to_one_batch PRIVATE disruptor)
+  target_link_libraries(disruptor_perf_three_to_three PRIVATE disruptor)
+  target_link_libraries(disruptor_perf_ping_pong PRIVATE disruptor)
+  target_link_libraries(disruptor_perf_one_to_one_raw PRIVATE disruptor)
+  target_link_libraries(disruptor_benchmark_analysis PRIVATE disruptor)
+  target_link_libraries(disruptor_benchmark_deep PRIVATE disruptor)
+  target_link_libraries(disruptor_perf_batch_throughput PRIVATE disruptor)
 endif()

@@ -9,7 +9,7 @@
 #include "exception_handler.h"
 #include "ring_buffer.h"
 #include "sequence.h"
-#include "sequence_barrier.h"
+#include "consumer_barrier.h"
 
 namespace disruptor
 {
