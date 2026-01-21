@@ -32,6 +32,7 @@ target_include_directories(disruptor INTERFACE
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/external/NanoLog/runtime
   ${CMAKE_CURRENT_SOURCE_DIR}/external/backward-cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/external/nanobench/src/include
 )
 
 target_link_libraries(disruptor INTERFACE nanolog Backward::Interface)
@@ -78,6 +79,7 @@ if (DISRUPTOR_BUILD_BENCHMARKS)
   add_executable(disruptor_benchmark_analysis benchmarks/benchmark_analysis.cpp)
   add_executable(disruptor_benchmark_deep benchmarks/benchmark_deep_analysis.cpp)
   add_executable(disruptor_perf_batch_throughput benchmarks/perftest_batch_throughput.cpp)
+  add_executable(disruptor_perf_nanobench benchmarks/perftest_nanobench.cpp)
 
   target_link_libraries(disruptor_benchmark PRIVATE disruptor)
   target_link_libraries(disruptor_jmh_spsc PRIVATE disruptor)
@@ -96,4 +98,5 @@ if (DISRUPTOR_BUILD_BENCHMARKS)
   target_link_libraries(disruptor_benchmark_analysis PRIVATE disruptor)
   target_link_libraries(disruptor_benchmark_deep PRIVATE disruptor)
   target_link_libraries(disruptor_perf_batch_throughput PRIVATE disruptor)
+  target_link_libraries(disruptor_perf_nanobench PRIVATE disruptor)
 endif()

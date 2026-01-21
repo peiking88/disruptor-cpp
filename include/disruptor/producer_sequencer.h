@@ -250,21 +250,18 @@ private:
  * Optimized MultiProducerSequencer:
  * - Branch prediction hints for unlikely conditions
  * - CPU pause instruction in wait loops
- * - Optimized batch publish
+ * - Java-style int[] + fence for availableBuffer (eliminates atomic overhead)
+ * - Optimized batch publish with single fence
  */
 class MultiProducerSequencer final : public AbstractSequencer
 {
 public:
     MultiProducerSequencer(int bufferSize, WaitStrategy& waitStrategy)
         : AbstractSequencer(bufferSize, waitStrategy),
-          availableBuffer(bufferSize),
+          availableBuffer(bufferSize, -1),
           indexMask(bufferSize - 1),
           indexShift(log2i(bufferSize))
     {
-        for (auto& slot : availableBuffer)
-        {
-            slot.store(-1, std::memory_order_relaxed);
-        }
     }
 
     bool hasAvailableCapacity(int requiredCapacity) override
@@ -364,16 +361,19 @@ public:
 
     void publish(long sequence) override
     {
-        setAvailable(sequence);
+        setAvailableBufferValue(calculateIndex(sequence), calculateAvailabilityFlag(sequence));
+        std::atomic_thread_fence(std::memory_order_release);
         waitStrategy.signalAllWhenBlocking();
     }
 
     void publish(long lo, long hi) override
     {
+        // Batch write without fence, then single fence at end (Java-style optimization)
         for (long s = lo; s <= hi; ++s)
         {
-            setAvailable(s);
+            setAvailableBufferValue(calculateIndex(s), calculateAvailabilityFlag(s));
         }
+        std::atomic_thread_fence(std::memory_order_release);
         waitStrategy.signalAllWhenBlocking();
     }
 
@@ -381,7 +381,8 @@ public:
     {
         int index = calculateIndex(sequence);
         int flag = calculateAvailabilityFlag(sequence);
-        return availableBuffer[index].load(std::memory_order_acquire) == flag;
+        std::atomic_thread_fence(std::memory_order_acquire);
+        return availableBuffer[index] == flag;
     }
 
     long getHighestPublishedSequence(long lowerBound, long availableSequence) override
@@ -415,11 +416,10 @@ private:
         return true;
     }
 
-    void setAvailable(long sequence)
+    // Direct buffer write without fence (fence applied in publish)
+    void setAvailableBufferValue(int index, int flag)
     {
-        int index = calculateIndex(sequence);
-        int flag = calculateAvailabilityFlag(sequence);
-        availableBuffer[index].store(flag, std::memory_order_release);
+        availableBuffer[index] = flag;
     }
 
     int calculateAvailabilityFlag(long sequence) const
@@ -433,7 +433,7 @@ private:
     }
 
     Sequence gatingSequenceCache{Sequence::INITIAL_VALUE};
-    std::vector<std::atomic<int>> availableBuffer;
+    std::vector<int> availableBuffer;  // Java-style: plain int array + manual fence
     int indexMask;
     int indexShift;
 };

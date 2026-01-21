@@ -9,8 +9,8 @@ A high-performance C++23 implementation of the Disruptor pattern.
 - Flexible consumer topologies: broadcast, pipeline, dependency graph
 - Multiple wait strategies (blocking, busy-spin, yielding, sleeping)
 - Cache-line padding to prevent false sharing
-- **Single-threaded throughput: 439 million ops/s** (164% faster than Java)
-- **Batch throughput: 1.45 billion events/s**
+- **Single-threaded throughput: 4.34e8 ops/s** (161% faster than Java)
+- **Batch throughput: 1.45e9 events/s**
 - **Ultra-low latency: P50 = 90ns, P99 = 150ns**
 
 ## Quick Start
@@ -134,15 +134,17 @@ auto rb = RingBuffer<Event>::createMultiProducer(factory, 65536, waitStrategy);
 
 ## Performance Results
 
-### Throughput (100M events)
+*Measured with [nanobench](https://github.com/martinus/nanobench) - 11 epochs, 3 warmup runs*
 
-| Test | Throughput | Notes |
-|------|------------|-------|
-| **OneToOne (optimized)** | **4.39e8 ops/s** | FastEventHandler + BusySpinWait |
-| **OneToOneBatch (100)** | **1.45e9 ops/s** | Batch publishing |
-| OneToThree (broadcast) | 1.02e8 ops/s | 3 consumers |
-| ThreeToOne | 3.76e7 ops/s | 3 producers |
-| ThreeToThree | 3.04e7 ops/s | 3 producers, 3 consumers |
+### Throughput (10M events)
+
+| Test | Throughput | ns/event | err% |
+|------|------------|----------|------|
+| **OneToOne (1P:1C)** | **4.34e8 ops/s** | 2.30 | 13.2% |
+| **OneToOneBatch (100)** | **1.45e9 ops/s** | 0.69 | - |
+| OneToThree (1P:3C) | 2.28e8 ops/s | 4.38 | 4.4% |
+| ThreeToOne (3P:1C) | 3.88e7 ops/s | 25.76 | 1.6% |
+| ThreeToThree (3P:3C) | 2.32e7 ops/s | 43.18 | 3.1% |
 
 ### Latency (Ping-Pong)
 
@@ -157,10 +159,10 @@ auto rb = RingBuffer<Event>::createMultiProducer(factory, 65536, waitStrategy);
 
 | Scenario | C++ | Java | Winner |
 |----------|-----|------|--------|
-| **Single-threaded (OneToOne)** | **4.39e8 ops/s** | 1.66e8 ops/s | **C++ +164%** |
-| Broadcast (1:3) | 1.02e8 ops/s | 7.45e7 ops/s | **C++ +37%** |
-| Multi-producer (3:1) | 3.76e7 ops/s | 3.55e7 ops/s | **C++ +6%** |
-| ThreeToThree (3:3) | 3.04e7 ops/s | 1.09e7 ops/s | **C++ +179%** |
+| **Single-threaded (1P:1C)** | **4.34e8 ops/s** | 1.66e8 ops/s | **C++ +161%** |
+| Broadcast (1P:3C) | 2.28e8 ops/s | 7.45e7 ops/s | **C++ +206%** |
+| Multi-producer (3P:1C) | 3.88e7 ops/s | 3.63e7 ops/s | **C++ +7%** |
+| ThreeToThree (3P:3C) | 2.32e7 ops/s | 1.09e7 ops/s | **C++ +113%** |
 | Latency P50 | 90 ns | 2,757 ns | **C++ 31x faster** |
 | Latency P99 | 150 ns | 7,925 ns | **C++ 53x faster** |
 
