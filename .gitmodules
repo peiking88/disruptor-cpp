@@ -7,3 +7,6 @@
 [submodule "external/Catch2"]
 	path = external/Catch2
 	url = https://bgithub.xyz/catchorg/Catch2.git
+[submodule "external/nanobench"]
+	path = external/nanobench
+	url = https://bgithub.xyz/martinus/nanobench
