@@ -1,9 +1,6 @@
-#include <atomic>
 #include <chrono>
-#include <condition_variable>
 #include <cstdlib>
 #include <iostream>
-#include <mutex>
 #include <thread>
 
 #include "disruptor/batch_event_processor.h"
@@ -16,44 +13,17 @@ struct ValueEvent
     long value = 0;
 };
 
-class ValueAdditionHandler final : public disruptor::EventHandler<ValueEvent>
+/**
+ * Optimized handler using FastEventHandler base class.
+ * Eliminates atomic operations in hot path - uses local variables instead.
+ */
+class ValueAdditionHandler final : public disruptor::FastEventHandler<ValueEvent>
 {
-public:
-    void reset(long expected)
+protected:
+    void processEvent(ValueEvent& evt, long) override
     {
-        expectedCount = expected;
-        count.store(0, std::memory_order_relaxed);
-        sum.store(0, std::memory_order_relaxed);
+        localSum_ += evt.value;  // No atomic operation, just local accumulation
     }
-
-    void onEvent(ValueEvent& evt, long, bool) override
-    {
-        sum.fetch_add(evt.value, std::memory_order_relaxed);
-        auto current = count.fetch_add(1, std::memory_order_relaxed) + 1;
-        if (current >= expectedCount)
-        {
-            std::lock_guard<std::mutex> lock(mutex);
-            cv.notify_all();
-        }
-    }
-
-    void waitForExpected()
-    {
-        std::unique_lock<std::mutex> lock(mutex);
-        cv.wait(lock, [&] { return count.load(std::memory_order_relaxed) >= expectedCount; });
-    }
-
-    long long getSum() const
-    {
-        return sum.load(std::memory_order_relaxed);
-    }
-
-private:
-    std::atomic<long> count{0};
-    std::atomic<long long> sum{0};
-    long expectedCount{0};
-    std::mutex mutex;
-    std::condition_variable cv;
 };
 
 long parseLong(const char* text, long fallback)
@@ -76,7 +46,7 @@ int main(int argc, char** argv)
     long iterations = parseLong(argc > 1 ? argv[1] : nullptr, 10'000'000L);
     int bufferSize = static_cast<int>(parseLong(argc > 2 ? argv[2] : nullptr, 1 << 16));
 
-    disruptor::YieldingWaitStrategy waitStrategy;
+    disruptor::BusySpinWaitStrategy waitStrategy;  // BusySpinWaitStrategy for maximum throughput
     auto ringBuffer = disruptor::RingBuffer<ValueEvent>::createSingleProducer(
         [] { return ValueEvent{}; }, bufferSize, waitStrategy);
 

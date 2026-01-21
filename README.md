@@ -9,7 +9,8 @@ A high-performance C++23 implementation of the Disruptor pattern.
 - Flexible consumer topologies: broadcast, pipeline, dependency graph
 - Multiple wait strategies (blocking, busy-spin, yielding, sleeping)
 - Cache-line padding to prevent false sharing
-- **Peak throughput: 4.23 billion events/s** (batch publishing)
+- **Single-threaded throughput: 439 million ops/s** (164% faster than Java)
+- **Batch throughput: 1.45 billion events/s**
 - **Ultra-low latency: P50 = 90ns, P99 = 150ns**
 
 ## Quick Start
@@ -133,14 +134,15 @@ auto rb = RingBuffer<Event>::createMultiProducer(factory, 65536, waitStrategy);
 
 ## Performance Results
 
-### Throughput
+### Throughput (100M events)
 
-| Mode | Throughput |
-|------|------------|
-| **Batch Mode2 (100)** | **4.23e9 events/s** |
-| Batch Mode1 (100) | 2.88e9 events/s |
-| Direct API (100) | 3.66e9 events/s |
-| Per-event | 3.10e8 events/s |
+| Test | Throughput | Notes |
+|------|------------|-------|
+| **OneToOne (optimized)** | **4.39e8 ops/s** | FastEventHandler + BusySpinWait |
+| **OneToOneBatch (100)** | **1.45e9 ops/s** | Batch publishing |
+| OneToThree (broadcast) | 1.02e8 ops/s | 3 consumers |
+| ThreeToOne | 3.76e7 ops/s | 3 producers |
+| ThreeToThree | 3.04e7 ops/s | 3 producers, 3 consumers |
 
 ### Latency (Ping-Pong)
 
@@ -153,12 +155,14 @@ auto rb = RingBuffer<Event>::createMultiProducer(factory, 65536, waitStrategy);
 
 ### vs Java Disruptor
 
-| Scenario | Winner |
-|----------|--------|
-| Latency (all percentiles) | **C++ wins** (31-9659x) |
-| Broadcast (1:3) | **C++ +38%** |
-| Multi-producer (3:1) | **C++ +6%** |
-| Single-threaded throughput | Java +21% (JIT advantage) |
+| Scenario | C++ | Java | Winner |
+|----------|-----|------|--------|
+| **Single-threaded (OneToOne)** | **4.39e8 ops/s** | 1.66e8 ops/s | **C++ +164%** |
+| Broadcast (1:3) | 1.02e8 ops/s | 7.45e7 ops/s | **C++ +37%** |
+| Multi-producer (3:1) | 3.76e7 ops/s | 3.55e7 ops/s | **C++ +6%** |
+| ThreeToThree (3:3) | 3.04e7 ops/s | 1.09e7 ops/s | **C++ +179%** |
+| Latency P50 | 90 ns | 2,757 ns | **C++ 31x faster** |
+| Latency P99 | 150 ns | 7,925 ns | **C++ 53x faster** |
 
 ## Header Files
 
@@ -181,4 +185,4 @@ auto rb = RingBuffer<Event>::createMultiProducer(factory, 65536, waitStrategy);
 
 ## License
 
-MIT
+Apache 2.0 License

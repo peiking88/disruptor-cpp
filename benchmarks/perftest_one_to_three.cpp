@@ -1,11 +1,8 @@
 // OneToThreeSequencedThroughputTest - 测试 1:3 广播吞吐性能
 // 拓扑：1 个生产者 -> 3 个并行消费者（广播模式，每个消费者独立处理所有事件）
-#include <atomic>
 #include <chrono>
-#include <condition_variable>
 #include <cstdlib>
 #include <iostream>
-#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -19,49 +16,20 @@ struct ValueEvent
     long value = 0;
 };
 
-class ValueAdditionHandler final : public disruptor::EventHandler<ValueEvent>
+/**
+ * Optimized handler using FastEventHandlerWithId.
+ * Eliminates atomic operations in hot path.
+ */
+class ValueAdditionHandler final : public disruptor::FastEventHandlerWithId<ValueEvent>
 {
 public:
-    explicit ValueAdditionHandler(int id) : handlerId(id) {}
+    explicit ValueAdditionHandler(int id) : FastEventHandlerWithId(id) {}
 
-    void reset(long expected)
+protected:
+    void processEvent(ValueEvent& evt, long) override
     {
-        expectedCount = expected;
-        count.store(0, std::memory_order_relaxed);
-        sum.store(0, std::memory_order_relaxed);
+        localSum_ += evt.value;
     }
-
-    void onEvent(ValueEvent& evt, long, bool) override
-    {
-        sum.fetch_add(evt.value, std::memory_order_relaxed);
-        auto current = count.fetch_add(1, std::memory_order_relaxed) + 1;
-        if (current >= expectedCount)
-        {
-            std::lock_guard<std::mutex> lock(mutex);
-            cv.notify_all();
-        }
-    }
-
-    void waitForExpected()
-    {
-        std::unique_lock<std::mutex> lock(mutex);
-        cv.wait(lock, [&] { return count.load(std::memory_order_relaxed) >= expectedCount; });
-    }
-
-    long long getSum() const
-    {
-        return sum.load(std::memory_order_relaxed);
-    }
-
-    int getId() const { return handlerId; }
-
-private:
-    int handlerId;
-    std::atomic<long> count{0};
-    std::atomic<long long> sum{0};
-    long expectedCount{0};
-    std::mutex mutex;
-    std::condition_variable cv;
 };
 
 long parseLong(const char* text, long fallback)
@@ -85,7 +53,7 @@ int main(int argc, char** argv)
     int bufferSize = static_cast<int>(parseLong(argc > 2 ? argv[2] : nullptr, 1 << 16));
     constexpr int numConsumers = 3;
 
-    disruptor::YieldingWaitStrategy waitStrategy;
+    disruptor::BusySpinWaitStrategy waitStrategy;  // BusySpinWaitStrategy for maximum throughput
     auto ringBuffer = disruptor::RingBuffer<ValueEvent>::createSingleProducer(
         [] { return ValueEvent{}; }, bufferSize, waitStrategy);
 

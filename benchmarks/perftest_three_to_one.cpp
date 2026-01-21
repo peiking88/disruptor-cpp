@@ -1,10 +1,8 @@
 #include <atomic>
 #include <chrono>
-#include <condition_variable>
 #include <cstdlib>
 #include <iostream>
 #include <latch>
-#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -18,39 +16,16 @@ struct ValueEvent
     long value = 0;
 };
 
-class ValueAdditionHandler final : public disruptor::EventHandler<ValueEvent>
+/**
+ * Optimized handler using FastEventHandler base class.
+ */
+class ValueAdditionHandler final : public disruptor::FastEventHandler<ValueEvent>
 {
-public:
-    void reset(long expected)
+protected:
+    void processEvent(ValueEvent& evt, long) override
     {
-        expectedCount = expected;
-        count.store(0, std::memory_order_relaxed);
-        sum.store(0, std::memory_order_relaxed);
+        localSum_ += evt.value;
     }
-
-    void onEvent(ValueEvent& evt, long, bool) override
-    {
-        sum.fetch_add(evt.value, std::memory_order_relaxed);
-        auto current = count.fetch_add(1, std::memory_order_relaxed) + 1;
-        if (current >= expectedCount)
-        {
-            std::lock_guard<std::mutex> lock(mutex);
-            cv.notify_all();
-        }
-    }
-
-    void waitForExpected()
-    {
-        std::unique_lock<std::mutex> lock(mutex);
-        cv.wait(lock, [&] { return count.load(std::memory_order_relaxed) >= expectedCount; });
-    }
-
-private:
-    std::atomic<long> count{0};
-    std::atomic<long long> sum{0};
-    long expectedCount{0};
-    std::mutex mutex;
-    std::condition_variable cv;
 };
 
 long parseLong(const char* text, long fallback)
