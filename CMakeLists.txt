@@ -5,6 +5,12 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+  add_compile_options(/W0)
+else()
+  add_compile_options(-w)
+endif()
+
 add_library(disruptor INTERFACE)
 
 add_subdirectory(external/backward-cpp EXCLUDE_FROM_ALL)
