@@ -25,6 +25,13 @@ add_library(nanolog STATIC
   external/NanoLog/runtime/GeneratedFunctionsStub.cc
 )
 
+add_executable(nanolog_decompressor
+  external/NanoLog/runtime/LogDecompressor.cc
+)
+
+target_include_directories(nanolog_decompressor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/external/NanoLog/runtime)
+target_link_libraries(nanolog_decompressor PRIVATE nanolog)
+
 target_include_directories(nanolog PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/NanoLog/runtime)
 target_link_libraries(nanolog PUBLIC rt pthread)
 
