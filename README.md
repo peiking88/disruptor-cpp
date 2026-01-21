@@ -31,6 +31,14 @@ cmake --build build -j$(nproc)
 ./build/disruptor_perf_ping_pong     # Latency test
 ```
 
+## Build Guide
+- Prerequisites: C++23 compiler (GCC 13+ / Clang 16+), CMake ≥ 3.20, Git with submodule support.
+- Fetch deps: `git submodule update --init --recursive` (brings Catch2, backward-cpp, NanoLog, nanobench).
+- Configure: `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release [-DDISRUPTOR_BUILD_TESTS=ON -DDISRUPTOR_BUILD_BENCHMARKS=ON]`
+- Build: `cmake --build build -j$(nproc)`
+- Run tests: `ctest --test-dir build` (if `DISRUPTOR_BUILD_TESTS=ON`).
+- Benchmarks: binaries under `build/` (if `DISRUPTOR_BUILD_BENCHMARKS=ON`).
+
 ## Performance Guide
 
 ### 1. Choose the Right Publishing Mode
