@@ -120,7 +120,7 @@ void benchFullPipeline()
 
     std::atomic<bool> done{false};
 
-    std::thread consumer([&] {
+    std::jthread consumer([&] {
         long expected = iterations - 1;
         long processed = -1;
 
@@ -153,7 +153,6 @@ void benchFullPipeline()
     auto end = Clock::now();
 
     barrier.alert();
-    consumer.join();
 
     double elapsed = std::chrono::duration<double>(end - start).count();
     std::cout << "  Full pipeline: " << iterations / elapsed << " ops/s\n";

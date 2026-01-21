@@ -60,7 +60,7 @@ double benchmarkOneToOne(long iterations, int bufferSize)
     disruptor::BatchEventProcessor<ValueEvent> processor(ringBuffer, barrier, handler);
     ringBuffer.addGatingSequences({&processor.getSequence()});
 
-    std::thread consumerThread([&] { processor.run(); });
+    std::jthread consumerThread([&] { processor.run(); });
 
     auto start = std::chrono::steady_clock::now();
     for (long i = 0; i < iterations; ++i)
@@ -74,7 +74,6 @@ double benchmarkOneToOne(long iterations, int bufferSize)
     auto end = std::chrono::steady_clock::now();
 
     processor.halt();
-    consumerThread.join();
 
     double seconds = std::chrono::duration<double>(end - start).count();
     return iterations / seconds;
@@ -105,7 +104,7 @@ double benchmarkOneToThree(long iterations, int bufferSize)
     }
     ringBuffer.addGatingSequences(gatingSequences);
 
-    std::vector<std::thread> consumerThreads;
+    std::vector<std::jthread> consumerThreads;
     for (auto& processor : processors)
     {
         consumerThreads.emplace_back([&processor] { processor->run(); });
@@ -129,10 +128,6 @@ double benchmarkOneToThree(long iterations, int bufferSize)
     {
         processor->halt();
     }
-    for (auto& t : consumerThreads)
-    {
-        t.join();
-    }
 
     double seconds = std::chrono::duration<double>(end - start).count();
     return iterations / seconds;
@@ -154,7 +149,7 @@ double benchmarkThreeToOne(long iterations, int bufferSize, int producers = 3)
     disruptor::BatchEventProcessor<ValueEvent> processor(ringBuffer, barrier, handler);
     ringBuffer.addGatingSequences({&processor.getSequence()});
 
-    std::thread consumerThread([&] { processor.run(); });
+    std::jthread consumerThread([&] { processor.run(); });
 
     long perProducer = iterations / producers;
     long remainder = iterations % producers;
@@ -162,7 +157,7 @@ double benchmarkThreeToOne(long iterations, int bufferSize, int producers = 3)
     std::atomic<int> readyCount{0};
     std::atomic<bool> startFlag{false};
 
-    std::vector<std::thread> producerThreads;
+    std::vector<std::jthread> producerThreads;
     for (int p = 0; p < producers; ++p)
     {
         long quota = perProducer + (p == 0 ? remainder : 0);
@@ -191,14 +186,13 @@ double benchmarkThreeToOne(long iterations, int bufferSize, int producers = 3)
 
     for (auto& t : producerThreads)
     {
-        t.join();
+        // jthread will join on destruction
     }
 
     handler.waitForExpected();
     auto end = std::chrono::steady_clock::now();
 
     processor.halt();
-    consumerThread.join();
 
     double seconds = std::chrono::duration<double>(end - start).count();
     return iterations / seconds;
@@ -229,7 +223,7 @@ double benchmarkThreeToThree(long iterations, int bufferSize, int producers = 3,
     }
     ringBuffer.addGatingSequences(gatingSequences);
 
-    std::vector<std::thread> consumerThreads;
+    std::vector<std::jthread> consumerThreads;
     for (auto& processor : processors)
     {
         consumerThreads.emplace_back([&processor] { processor->run(); });
@@ -241,7 +235,7 @@ double benchmarkThreeToThree(long iterations, int bufferSize, int producers = 3,
     std::atomic<int> readyCount{0};
     std::atomic<bool> startFlag{false};
 
-    std::vector<std::thread> producerThreads;
+    std::vector<std::jthread> producerThreads;
     for (int p = 0; p < producers; ++p)
     {
         long quota = perProducer + (p == 0 ? remainder : 0);
@@ -270,7 +264,7 @@ double benchmarkThreeToThree(long iterations, int bufferSize, int producers = 3,
 
     for (auto& t : producerThreads)
     {
-        t.join();
+        // jthread will join on destruction
     }
 
     for (auto& handler : handlers)
@@ -282,10 +276,6 @@ double benchmarkThreeToThree(long iterations, int bufferSize, int producers = 3,
     for (auto& processor : processors)
     {
         processor->halt();
-    }
-    for (auto& t : consumerThreads)
-    {
-        t.join();
     }
 
     double seconds = std::chrono::duration<double>(end - start).count();

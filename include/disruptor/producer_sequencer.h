@@ -258,10 +258,14 @@ class MultiProducerSequencer final : public AbstractSequencer
 public:
     MultiProducerSequencer(int bufferSize, WaitStrategy& waitStrategy)
         : AbstractSequencer(bufferSize, waitStrategy),
-          availableBuffer(bufferSize, -1),
+          availableBuffer(bufferSize),
           indexMask(bufferSize - 1),
           indexShift(log2i(bufferSize))
     {
+        for (auto& slot : availableBuffer)
+        {
+            slot.store(-1, std::memory_order_relaxed);
+        }
     }
 
     bool hasAvailableCapacity(int requiredCapacity) override
@@ -381,8 +385,7 @@ public:
     {
         int index = calculateIndex(sequence);
         int flag = calculateAvailabilityFlag(sequence);
-        std::atomic_thread_fence(std::memory_order_acquire);
-        return availableBuffer[index] == flag;
+        return availableBuffer[index].load(std::memory_order_acquire) == flag;
     }
 
     long getHighestPublishedSequence(long lowerBound, long availableSequence) override
@@ -416,10 +419,10 @@ private:
         return true;
     }
 
-    // Direct buffer write without fence (fence applied in publish)
+    // Direct buffer write; per-slot release store used
     void setAvailableBufferValue(int index, int flag)
     {
-        availableBuffer[index] = flag;
+        availableBuffer[index].store(flag, std::memory_order_release);
     }
 
     int calculateAvailabilityFlag(long sequence) const
@@ -433,7 +436,7 @@ private:
     }
 
     Sequence gatingSequenceCache{Sequence::INITIAL_VALUE};
-    std::vector<int> availableBuffer;  // Java-style: plain int array + manual fence
+    std::vector<std::atomic<int>> availableBuffer;  // Atomic slots to avoid data races
     int indexMask;
     int indexShift;
 };
