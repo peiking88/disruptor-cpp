@@ -46,12 +46,12 @@ if (DISRUPTOR_BUILD_TESTS)
     tests/test_sequence.cpp
     tests/test_single_producer.cpp
     tests/test_multi_producer.cpp
-    tests/test_exception_and_lifecycle.cpp
+    tests/test_exception_handler.cpp
     tests/test_stress_multi_producer.cpp
     tests/test_ring_buffer.cpp
-    tests/test_sequence_barrier.cpp
+    tests/test_consumer_barrier.cpp
     tests/test_wait_strategy.cpp
-    tests/test_sequencer.cpp
+    tests/test_producer_sequencer.cpp
     tests/test_batch_event_processor.cpp
     tests/test_util.cpp
   )
