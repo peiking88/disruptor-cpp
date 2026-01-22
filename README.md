@@ -9,7 +9,7 @@ A high-performance C++23 implementation of the Disruptor pattern.
 - Flexible consumer topologies: broadcast, pipeline, dependency graph
 - Multiple wait strategies (blocking, busy-spin, yielding, sleeping)
 - Cache-line padding to prevent false sharing
-- **Single-threaded throughput: 4.34e8 ops/s** (161% faster than Java)
+- **Single-threaded throughput: 4.58e8 ops/s** (176% faster than Java)
 - **Batch throughput: 1.45e9 events/s**
 - **Ultra-low latency: P50 = 90ns, P99 = 150ns**
 
@@ -148,11 +148,11 @@ auto rb = RingBuffer<Event>::createMultiProducer(factory, 65536, waitStrategy);
 
 | Test | Throughput | ns/event | err% |
 |------|------------|----------|------|
-| **OneToOne (1P:1C)** | **4.34e8 ops/s** | 2.30 | 13.2% |
+| **OneToOne (1P:1C)** | **4.58e8 ops/s** | 2.38 | 9.0% |
 | **OneToOneBatch (100)** | **1.45e9 ops/s** | 0.69 | - |
-| OneToThree (1P:3C) | 2.28e8 ops/s | 4.38 | 4.4% |
-| ThreeToOne (3P:1C) | 3.88e7 ops/s | 25.76 | 1.6% |
-| ThreeToThree (3P:3C) | 2.32e7 ops/s | 43.18 | 3.1% |
+| OneToThree (1P:3C) | 1.94e8 ops/s | 5.05 | 9.0% |
+| ThreeToOne (3P:1C) | 3.81e7 ops/s | 26.97 | 2.3% |
+| ThreeToThree (3P:3C) | 2.59e7 ops/s | 39.36 | 1.8% |
 
 ### Latency (Ping-Pong)
 
@@ -167,10 +167,10 @@ auto rb = RingBuffer<Event>::createMultiProducer(factory, 65536, waitStrategy);
 
 | Scenario | C++ | Java | Winner |
 |----------|-----|------|--------|
-| **Single-threaded (1P:1C)** | **4.34e8 ops/s** | 1.66e8 ops/s | **C++ +161%** |
-| Broadcast (1P:3C) | 2.28e8 ops/s | 7.45e7 ops/s | **C++ +206%** |
-| Multi-producer (3P:1C) | 3.88e7 ops/s | 3.63e7 ops/s | **C++ +7%** |
-| ThreeToThree (3P:3C) | 2.32e7 ops/s | 1.09e7 ops/s | **C++ +113%** |
+| **Single-threaded (1P:1C)** | **4.58e8 ops/s** | 1.66e8 ops/s | **C++ +176%** |
+| Broadcast (1P:3C) | 1.94e8 ops/s | 7.45e7 ops/s | **C++ +160%** |
+| Multi-producer (3P:1C) | 3.81e7 ops/s | 3.63e7 ops/s | **C++ +5%** |
+| ThreeToThree (3P:3C) | 2.59e7 ops/s | 1.09e7 ops/s | **C++ +138%** |
 | Latency P50 | 90 ns | 2,757 ns | **C++ 31x faster** |
 | Latency P99 | 150 ns | 7,925 ns | **C++ 53x faster** |
 
