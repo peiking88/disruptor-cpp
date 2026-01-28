@@ -1,2 +1,0 @@
-/usr/bin/ar qc libnanolog.a CMakeFiles/nanolog.dir/external/NanoLog/runtime/Cycles.cc.o CMakeFiles/nanolog.dir/external/NanoLog/runtime/Util.cc.o CMakeFiles/nanolog.dir/external/NanoLog/runtime/Log.cc.o CMakeFiles/nanolog.dir/external/NanoLog/runtime/NanoLog.cc.o CMakeFiles/nanolog.dir/external/NanoLog/runtime/RuntimeLogger.cc.o CMakeFiles/nanolog.dir/external/NanoLog/runtime/TimeTrace.cc.o CMakeFiles/nanolog.dir/external/NanoLog/runtime/GeneratedFunctionsStub.cc.o
-/usr/bin/ranlib libnanolog.a
