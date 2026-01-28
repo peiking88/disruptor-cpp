@@ -260,14 +260,10 @@ class MultiProducerSequencer final : public AbstractSequencer
 public:
     MultiProducerSequencer(int bufferSize, WaitStrategy& waitStrategy)
         : AbstractSequencer(bufferSize, waitStrategy),
-          availableBuffer(bufferSize),
+          availableBuffer(bufferSize, -1),
           indexMask(bufferSize - 1),
           indexShift(log2i(bufferSize))
     {
-        for (auto& slot : availableBuffer)
-        {
-            slot.store(-1, std::memory_order_relaxed);
-        }
     }
 
     bool hasAvailableCapacity(int requiredCapacity) override
@@ -282,28 +278,41 @@ public:
         return bufferSize - (produced - consumed);
     }
 
-    // Optimized: inline single-element case
+    // Optimized: inline single-element case with thread-local gating cache
     long next() override
     {
+        // P1 optimization: thread-local gating cache to reduce shared cache contention
+        thread_local long localGatingCache = Sequence::INITIAL_VALUE;
+        
         long current = cursor.getAndAdd(1);
         long nextSequence = current + 1;
         long wrapPoint = nextSequence - bufferSize;
-        long cachedGating = gatingSequenceCache.get();
-
-        if (__builtin_expect(wrapPoint > cachedGating || cachedGating > current, 0))
+        
+        // First check thread-local cache (no atomic read)
+        if (__builtin_expect(wrapPoint > localGatingCache, 0))
         {
-            long gatingSequence;
-            while (wrapPoint > (gatingSequence = getMinimumSequence(gatingSequences, current)))
+            // Then check shared cache
+            long cachedGating = gatingSequenceCache.get();
+            if (wrapPoint > cachedGating || cachedGating > current)
             {
-                #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
-                    __builtin_ia32_pause();
-                #elif defined(__aarch64__) || defined(_M_ARM64)
-                    asm volatile("yield" ::: "memory");
-                #else
-                    std::this_thread::yield();
-                #endif
+                long gatingSequence;
+                while (wrapPoint > (gatingSequence = getMinimumSequence(gatingSequences, current)))
+                {
+                    #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
+                        __builtin_ia32_pause();
+                    #elif defined(__aarch64__) || defined(_M_ARM64)
+                        asm volatile("yield" ::: "memory");
+                    #else
+                        std::this_thread::yield();
+                    #endif
+                }
+                gatingSequenceCache.set(gatingSequence);
+                localGatingCache = gatingSequence;
             }
-            gatingSequenceCache.set(gatingSequence);
+            else
+            {
+                localGatingCache = cachedGating;
+            }
         }
 
         return nextSequence;
@@ -316,25 +325,37 @@ public:
             throw std::invalid_argument("n must be > 0 and < bufferSize");
         }
 
+        // P1 optimization: thread-local gating cache
+        thread_local long localGatingCache = Sequence::INITIAL_VALUE;
+        
         long current = cursor.getAndAdd(n);
         long nextSequence = current + n;
         long wrapPoint = nextSequence - bufferSize;
-        long cachedGating = gatingSequenceCache.get();
-
-        if (__builtin_expect(wrapPoint > cachedGating || cachedGating > current, 0))
+        
+        // First check thread-local cache (no atomic read)
+        if (__builtin_expect(wrapPoint > localGatingCache, 0))
         {
-            long gatingSequence;
-            while (wrapPoint > (gatingSequence = getMinimumSequence(gatingSequences, current)))
+            long cachedGating = gatingSequenceCache.get();
+            if (wrapPoint > cachedGating || cachedGating > current)
             {
-                #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
-                    __builtin_ia32_pause();
-                #elif defined(__aarch64__) || defined(_M_ARM64)
-                    asm volatile("yield" ::: "memory");
-                #else
-                    std::this_thread::yield();
-                #endif
+                long gatingSequence;
+                while (wrapPoint > (gatingSequence = getMinimumSequence(gatingSequences, current)))
+                {
+                    #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
+                        __builtin_ia32_pause();
+                    #elif defined(__aarch64__) || defined(_M_ARM64)
+                        asm volatile("yield" ::: "memory");
+                    #else
+                        std::this_thread::yield();
+                    #endif
+                }
+                gatingSequenceCache.set(gatingSequence);
+                localGatingCache = gatingSequence;
             }
-            gatingSequenceCache.set(gatingSequence);
+            else
+            {
+                localGatingCache = cachedGating;
+            }
         }
 
         return nextSequence;
@@ -365,13 +386,12 @@ public:
         return nextSequence;
     }
 
-    Sequence& getPublishedCursor() override { return publishedCursor; }
+    Sequence& getPublishedCursor() override { return cursor; }
 
     void publish(long sequence) override
     {
         setAvailableBufferValue(calculateIndex(sequence), calculateAvailabilityFlag(sequence));
         std::atomic_thread_fence(std::memory_order_release);
-        tryAdvancePublishedCursor();
         waitStrategy.signalAllWhenBlocking();
     }
 
@@ -383,7 +403,6 @@ public:
             setAvailableBufferValue(calculateIndex(s), calculateAvailabilityFlag(s));
         }
         std::atomic_thread_fence(std::memory_order_release);
-        tryAdvancePublishedCursor();
         waitStrategy.signalAllWhenBlocking();
     }
 
@@ -391,7 +410,8 @@ public:
     {
         int index = calculateIndex(sequence);
         int flag = calculateAvailabilityFlag(sequence);
-        return availableBuffer[index].load(std::memory_order_acquire) == flag;
+        std::atomic_thread_fence(std::memory_order_acquire);
+        return availableBuffer[index] == flag;
     }
 
     long getHighestPublishedSequence(long lowerBound, long availableSequence) override
@@ -425,10 +445,10 @@ private:
         return true;
     }
 
-    // Direct buffer write; per-slot release store used
+    // Direct buffer write without fence (fence applied in publish)
     void setAvailableBufferValue(int index, int flag)
     {
-        availableBuffer[index].store(flag, std::memory_order_release);
+        availableBuffer[index] = flag;
     }
 
     int calculateAvailabilityFlag(long sequence) const
@@ -441,26 +461,8 @@ private:
         return static_cast<int>(sequence) & indexMask;
     }
 
-    void tryAdvancePublishedCursor()
-    {
-        long current = publishedCursor.getRelaxed();
-        long next = current + 1;
-
-        while (isAvailable(next))
-        {
-            current = next;
-            ++next;
-        }
-
-        if (current > publishedCursor.getRelaxed())
-        {
-            publishedCursor.set(current);
-        }
-    }
-
     Sequence gatingSequenceCache{Sequence::INITIAL_VALUE};
-    Sequence publishedCursor{Sequence::INITIAL_VALUE};
-    std::vector<std::atomic<int>> availableBuffer;  // Atomic slots to avoid data races
+    std::vector<int> availableBuffer;  // Java-style: plain int array + manual fence
     int indexMask;
     int indexShift;
 };

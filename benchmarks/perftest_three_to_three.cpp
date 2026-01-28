@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <mutex>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -56,8 +57,14 @@ int main(int argc, char** argv)
     int numConsumers = static_cast<int>(parseLong(argc > 2 ? argv[2] : nullptr, 3));
     long iterations = parseLong(argc > 3 ? argv[3] : nullptr, 10'000'000L);
     int bufferSize = static_cast<int>(parseLong(argc > 4 ? argv[4] : nullptr, 1 << 16));
+    std::string wait = (argc > 5 && argv[5]) ? std::string(argv[5]) : std::string("busy");
 
-    disruptor::BusySpinWaitStrategy waitStrategy;
+    disruptor::BusySpinWaitStrategy busy;
+    disruptor::YieldingWaitStrategy yielding;
+    disruptor::WaitStrategy& waitStrategy = (wait == "yield" || wait == "yielding")
+        ? static_cast<disruptor::WaitStrategy&>(yielding)
+        : static_cast<disruptor::WaitStrategy&>(busy);
+
     auto ringBuffer = disruptor::RingBuffer<ValueEvent>::createMultiProducer(
         [] { return ValueEvent{}; }, bufferSize, waitStrategy);
 
@@ -161,6 +168,8 @@ int main(int argc, char** argv)
     double opsPerSecond = iterations / seconds;
 
     std::cout << "PerfTest: ThreeToThreeSequencedThroughput\n";
+    std::cout << "WaitStrategy: " << ((wait == "yield" || wait == "yielding") ? "Yielding" : "BusySpin") << "\n";
+    std::cout << "BufferSize: " << bufferSize << "\n";
     std::cout << "Producers: " << numProducers << "\n";
     std::cout << "Consumers: " << numConsumers << "\n";
     std::cout << "Iterations: " << iterations << "\n";

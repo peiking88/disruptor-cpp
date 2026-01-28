@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -113,10 +114,20 @@ int main(int argc, char** argv)
 {
     long iterations = parseLong(argc > 1 ? argv[1] : nullptr, 1'000'000L);
     int bufferSize = static_cast<int>(parseLong(argc > 2 ? argv[2] : nullptr, 1024));
+    std::string wait = (argc > 3 && argv[3]) ? std::string(argv[3]) : std::string("busy");
 
-    // 创建两个 RingBuffer 形成乒乓
-    disruptor::BusySpinWaitStrategy pingWaitStrategy;
-    disruptor::BusySpinWaitStrategy pongWaitStrategy;
+    disruptor::BusySpinWaitStrategy busyPing;
+    disruptor::BusySpinWaitStrategy busyPong;
+    disruptor::YieldingWaitStrategy yieldingPing;
+    disruptor::YieldingWaitStrategy yieldingPong;
+
+    disruptor::WaitStrategy& pingWaitStrategy = (wait == "yield" || wait == "yielding")
+        ? static_cast<disruptor::WaitStrategy&>(yieldingPing)
+        : static_cast<disruptor::WaitStrategy&>(busyPing);
+
+    disruptor::WaitStrategy& pongWaitStrategy = (wait == "yield" || wait == "yielding")
+        ? static_cast<disruptor::WaitStrategy&>(yieldingPong)
+        : static_cast<disruptor::WaitStrategy&>(busyPong);
 
     auto pingBuffer = disruptor::RingBuffer<PingPongEvent>::createSingleProducer(
         [] { return PingPongEvent{}; }, bufferSize, pingWaitStrategy);
@@ -183,6 +194,8 @@ int main(int argc, char** argv)
     double avgLatency = static_cast<double>(sum) / latencies.size();
 
     std::cout << "PerfTest: PingPongSequencedLatency\n";
+    std::cout << "WaitStrategy: " << ((wait == "yield" || wait == "yielding") ? "Yielding" : "BusySpin") << "\n";
+    std::cout << "BufferSize: " << bufferSize << "\n";
     std::cout << "Iterations: " << iterations << "\n";
     std::cout << "Total Time(s): " << totalSeconds << "\n";
     std::cout << "Throughput(round-trips/s): " << iterations / totalSeconds << "\n";

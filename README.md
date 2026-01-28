@@ -9,7 +9,7 @@ A high-performance C++23 implementation of the Disruptor pattern.
 - Flexible consumer topologies: broadcast, pipeline, dependency graph
 - Multiple wait strategies (blocking, busy-spin, yielding, sleeping)
 - Cache-line padding to prevent false sharing
-- **Single-threaded throughput: 4.58e8 ops/s** (176% faster than Java)
+- **Single-threaded throughput: 4.87e8 ops/s** (121% faster than Java)
 - **Batch throughput: 1.45e9 events/s**
 - **Ultra-low latency: P50 = 90ns, P99 = 150ns**
 
@@ -142,17 +142,17 @@ auto rb = RingBuffer<Event>::createMultiProducer(factory, 65536, waitStrategy);
 
 ## Performance Results
 
-*Measured with [nanobench](https://github.com/martinus/nanobench) - 11 epochs, 3 warmup runs*
+*Measured with [nanobench](https://github.com/martinus/nanobench) - 11 epochs, 3 warmup runs, -O3 + LTO optimization*
 
 ### Throughput (10M events)
 
 | Test | Throughput | ns/event | err% |
 |------|------------|----------|------|
-| **OneToOne (1P:1C)** | **4.58e8 ops/s** | 2.38 | 9.0% |
+| **OneToOne (1P:1C)** | **4.87e8 ops/s** | 2.68 | 23.6% |
 | **OneToOneBatch (100)** | **1.45e9 ops/s** | 0.69 | - |
-| OneToThree (1P:3C) | 1.94e8 ops/s | 5.05 | 9.0% |
-| ThreeToOne (3P:1C) | 3.81e7 ops/s | 26.97 | 2.3% |
-| ThreeToThree (3P:3C) | 2.59e7 ops/s | 39.36 | 1.8% |
+| OneToThree (1P:3C) | 2.12e8 ops/s | 5.17 | 8.2% |
+| ThreeToOne (3P:1C) | 4.13e7 ops/s | 24.63 | 1.8% |
+| ThreeToThree (3P:3C) | 2.27e7 ops/s | 41.75 | 2.6% |
 
 ### Latency (Ping-Pong)
 
@@ -167,39 +167,39 @@ auto rb = RingBuffer<Event>::createMultiProducer(factory, 65536, waitStrategy);
 
 | Scenario | C++ | Java | Winner |
 |----------|-----|------|--------|
-| **Single-threaded (1P:1C)** | **4.58e8 ops/s** | 1.66e8 ops/s | **C++ +176%** |
-| Broadcast (1P:3C) | 1.94e8 ops/s | 7.45e7 ops/s | **C++ +160%** |
-| Multi-producer (3P:1C) | 3.81e7 ops/s | 3.63e7 ops/s | **C++ +5%** |
-| ThreeToThree (3P:3C) | 2.59e7 ops/s | 1.09e7 ops/s | **C++ +138%** |
+| **Single-threaded (1P:1C)** | **4.87e8 ops/s** | 2.20e8 ops/s | **C++ +121%** |
+| Broadcast (1P:3C) | 2.12e8 ops/s | 1.10e8 ops/s | **C++ +93%** |
+| Multi-producer (3P:1C) | 4.13e7 ops/s | 3.00e7 ops/s | **C++ +38%** |
 | Latency P50 | 90 ns | 2,757 ns | **C++ 31x faster** |
 | Latency P99 | 150 ns | 7,925 ns | **C++ 53x faster** |
 
 ### vs moodycamel queues
 
-*Measured on Linux (Release build), fixed CPU pinning, with a short warmup run.*
+*Measured on Linux (Release -O3 + LTO build), fixed CPU pinning, with a short warmup run.*
 
 #### SPSC: Disruptor-CPP vs moodycamel::ReaderWriterQueue (10M msgs)
 
-Command: `./build/disruptor_cmp_spsc_readerwriterqueue 10000000 65536 0 1 0`
+Command: `./build/disruptor_cmp_spsc_readerwriterqueue`
 
 | Impl | Throughput (msg/s) | Relative |
 |------|---------------------|----------|
-| Disruptor-CPP | 3.458e7 | 2.89x |
-| ReaderWriterQueue | 1.195e7 | 1.00x |
+| Disruptor-CPP (batch=2048) | 4.09e9 | **10.4x** |
+| ReaderWriterQueue | 3.93e8 | 1.00x |
 
 #### MPMC: Disruptor-CPP vs moodycamel::ConcurrentQueue (10M msgs)
 
-Command: `./build/disruptor_cmp_mpmc_concurrentqueue 4 4 10000000 65536 0 8 1024`
+Command: `./build/disruptor_cmp_mpmc_concurrentqueue`
 
 Notes:
-- Disruptor-CPP uses `WorkProcessor` work-queue (each message consumed once; WorkProcessor claim batch = 8, producer publish batch = 1024).
+- Disruptor-CPP uses `WorkProcessor` work-queue (each message consumed once).
 - ConcurrentQueue uses standard `try_dequeue` work-queue semantics.
-- Pinning is NUMA-local and prefers distinct physical cores (strict). The binary prints the exact CPU list.
+- **Disruptor is optimized for SPSC/SPMC/MPSC patterns, not MPMC work-queue scenarios.**
+- For MPMC work-queue use cases, we recommend using `moodycamel::ConcurrentQueue` directly.
 
 | Impl | Throughput (msg/s) | Relative |
 |------|---------------------|----------|
-| Disruptor-CPP | 1.000e8 | 4.01x |
-| ConcurrentQueue | 2.494e7 | 1.00x |
+| ConcurrentQueue | 4.52e7 | **24x** |
+| Disruptor-CPP | 1.89e6 | 1.00x |
 
 ## Header Files
 
@@ -213,6 +213,24 @@ Notes:
 | `batch_event_processor.h` | Event processor with batching |
 | `event_handler.h` | Event handler interfaces |
 | `cache_line_storage.h` | Generic cache-line padding template |
+
+## Dependencies
+
+All dependencies are managed as Git submodules under `external/`:
+
+| Library | Purpose | License |
+|---------|---------|--------|
+| [Catch2](https://github.com/catchorg/Catch2) | Unit testing framework | BSL-1.0 |
+| [backward-cpp](https://github.com/bombela/backward-cpp) | Stack trace on crash | MIT |
+| [NanoLog](https://github.com/PlatformLab/NanoLog) | High-performance logging | Apache-2.0 |
+| [nanobench](https://github.com/martinus/nanobench) | Microbenchmarking | MIT |
+| [concurrentqueue](https://github.com/cameron314/concurrentqueue) | MPMC queue (benchmark comparison) | BSD |
+| [readerwriterqueue](https://github.com/cameron314/readerwriterqueue) | SPSC queue (benchmark comparison) | BSD |
+
+To fetch all dependencies:
+```bash
+git submodule update --init --recursive
+```
 
 ## Requirements
 

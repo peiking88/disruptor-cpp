@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
@@ -244,7 +245,7 @@ struct RunResult {
     long long sum = 0;
 };
 
-RunResult run_disruptor_spsc(long iterations, int bufferSize, int consumerCpu, int producerCpu) {
+RunResult run_disruptor_spsc(long iterations, int bufferSize, int consumerCpu, int producerCpu, int publishBatch) {
     disruptor::BusySpinWaitStrategy waitStrategy;
     auto ringBuffer = disruptor::RingBuffer<ValueEvent>::createSingleProducer(
         [] { return ValueEvent{}; }, bufferSize, waitStrategy);
@@ -303,10 +304,24 @@ RunResult run_disruptor_spsc(long iterations, int bufferSize, int consumerCpu, i
             std::this_thread::yield();
         }
 
-        for (long i = 0; i < iterations; ++i) {
-            long seq = ringBuffer.next();
-            ringBuffer.get(seq).value = i;
-            ringBuffer.publish(seq);
+        int batch = publishBatch;
+        if (batch < 1) {
+            batch = 1;
+        }
+        if (batch > bufferSize) {
+            batch = bufferSize;
+        }
+
+        long produced = 0;
+        while (produced < iterations) {
+            int n = static_cast<int>(std::min<long>(batch, iterations - produced));
+            long hi = ringBuffer.next(n);
+            long lo = hi - n + 1;
+            for (int j = 0; j < n; ++j) {
+                ringBuffer.get(lo + j).value = produced + j;
+            }
+            ringBuffer.publish(lo, hi);
+            produced += n;
         }
     });
 
@@ -411,9 +426,12 @@ int main(int argc, char** argv) {
     // Optional mode:
     //   mode=0 (default): explicit CPU ids (strict check, no modulo)
     //   mode=1: auto pick 2 distinct physical cores in same NUMA node as baseCpu(arg3); producerCpu ignored
+    // Optional publish batch:
+    //   publishBatch (default 2048): Disruptor producer publishes in batch via next(n)+publish(lo,hi)
     int consumerCpu = static_cast<int>(parseLong(argc > 3 ? argv[3] : nullptr, 0));
     int producerCpu = static_cast<int>(parseLong(argc > 4 ? argv[4] : nullptr, 1));
     int mode = static_cast<int>(parseLong(argc > 5 ? argv[5] : nullptr, 0));
+    int publishBatch = static_cast<int>(parseLong(argc > 6 ? argv[6] : nullptr, 2048));
 
 #ifdef __linux__
     auto cpus = enumerateCpus();
@@ -444,6 +462,7 @@ int main(int argc, char** argv) {
     std::cout << "Benchmark: SPSC (each message consumed once)\n";
     std::cout << "Iterations: " << iterations << "\n";
     std::cout << "Queue/Ring capacity: " << capacity << "\n";
+    std::cout << "Disruptor producer publish batch: " << publishBatch << "\n";
     std::cout << "Pinning: consumer->CPU" << consumerCpu << ", producer->CPU" << producerCpu << "\n";
     std::cout << "Pin mode: " << (mode == 1 ? "auto-numa+physical" : "explicit-strict") << "\n\n";
 #else
@@ -453,10 +472,10 @@ int main(int argc, char** argv) {
 #endif
 
     // Warmup
-    (void)run_disruptor_spsc(200'000L, capacity, consumerCpu, producerCpu);
+    (void)run_disruptor_spsc(200'000L, capacity, consumerCpu, producerCpu, publishBatch);
     (void)run_readerwriterqueue_spsc(200'000L, capacity, consumerCpu, producerCpu);
 
-    auto d = run_disruptor_spsc(iterations, capacity, consumerCpu, producerCpu);
+    auto d = run_disruptor_spsc(iterations, capacity, consumerCpu, producerCpu, publishBatch);
     auto q = run_readerwriterqueue_spsc(iterations, capacity, consumerCpu, producerCpu);
 
     std::cout << "Disruptor-CPP:\n";

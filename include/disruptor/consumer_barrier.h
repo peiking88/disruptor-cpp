@@ -77,6 +77,36 @@ public:
         return cursor->get();
     }
 
+    /**
+     * P2 optimization: Non-blocking check for available sequences.
+     * Returns the highest available sequence, or -1 if none available.
+     */
+    long tryGetAvailable(long sequence) const
+    {
+        // Check cursor first
+        long available = cursor->get();
+        if (available < sequence)
+        {
+            return -1;
+        }
+        
+        // Check dependents
+        for (Sequence* dep : dependents)
+        {
+            long depSeq = dep->get();
+            if (depSeq < sequence)
+            {
+                return -1;
+            }
+            if (depSeq < available)
+            {
+                available = depSeq;
+            }
+        }
+        
+        return available;
+    }
+
 private:
     WaitStrategy* waitStrategy;
     Sequence* cursor;

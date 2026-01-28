@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <iostream>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -51,9 +52,15 @@ int main(int argc, char** argv)
 {
     long iterations = parseLong(argc > 1 ? argv[1] : nullptr, 10'000'000L);
     int bufferSize = static_cast<int>(parseLong(argc > 2 ? argv[2] : nullptr, 1 << 16));
+    std::string wait = (argc > 3 && argv[3]) ? std::string(argv[3]) : std::string("busy");
     constexpr int numConsumers = 3;
 
-    disruptor::BusySpinWaitStrategy waitStrategy;  // BusySpinWaitStrategy for maximum throughput
+    disruptor::BusySpinWaitStrategy busy;
+    disruptor::YieldingWaitStrategy yielding;
+    disruptor::WaitStrategy& waitStrategy = (wait == "yield" || wait == "yielding")
+        ? static_cast<disruptor::WaitStrategy&>(yielding)
+        : static_cast<disruptor::WaitStrategy&>(busy);
+
     auto ringBuffer = disruptor::RingBuffer<ValueEvent>::createSingleProducer(
         [] { return ValueEvent{}; }, bufferSize, waitStrategy);
 
@@ -121,6 +128,8 @@ int main(int argc, char** argv)
     long long expectedSum = (static_cast<long long>(iterations - 1) * iterations) / 2;
 
     std::cout << "PerfTest: OneToThreeSequencedThroughput (Broadcast)\n";
+    std::cout << "WaitStrategy: " << ((wait == "yield" || wait == "yielding") ? "Yielding" : "BusySpin") << "\n";
+    std::cout << "BufferSize: " << bufferSize << "\n";
     std::cout << "Consumers: " << numConsumers << "\n";
     std::cout << "Iterations: " << iterations << "\n";
     std::cout << "Time(s): " << seconds << "\n";
