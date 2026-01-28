@@ -272,11 +272,22 @@ RunResult run_disruptor_spsc(long iterations, int bufferSize, int consumerCpu, i
         long next = 0;
         while (next < iterations) {
             long available = barrier.waitFor(next);
-            while (next <= available && next < iterations) {
-                localSum += ringBuffer.get(next).value;
-                consumerSequence.set(next);
-                ++next;
+            if (available < next) {
+                continue;
             }
+
+            long hi = available;
+            long last = iterations - 1;
+            if (hi > last) {
+                hi = last;
+            }
+
+            for (; next <= hi; ++next) {
+                localSum += ringBuffer.get(next).value;
+            }
+
+            // Update gating sequence once per chunk.
+            consumerSequence.set(hi);
         }
         sum.store(localSum, std::memory_order_relaxed);
     });

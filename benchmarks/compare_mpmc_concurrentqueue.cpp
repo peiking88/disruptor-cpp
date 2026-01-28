@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
@@ -17,6 +18,8 @@
 #include "disruptor/ring_buffer.h"
 #include "disruptor/sequence.h"
 #include "disruptor/wait_strategy.h"
+#include "disruptor/work_handler.h"
+#include "disruptor/work_processor.h"
 
 #include "concurrentqueue.h"
 
@@ -258,102 +261,143 @@ struct RunResult {
     long long sum = 0;
 };
 
-RunResult run_disruptor_mpmc(int producers, int consumers, long totalMessages, int bufferSize, const std::vector<int>& cpuMapConsumers,
-                            const std::vector<int>& cpuMapProducers) {
+struct SumWorkHandler final : public disruptor::WorkHandler<ValueEvent>
+{
+    void onEvent(ValueEvent& event, long) override
+    {
+        sum += event.value;
+    }
+
+    long long sum = 0;
+};
+
+RunResult run_disruptor_mpmc(int producers, int consumers, long totalMessages, int bufferSize, int workBatchSize, int publishBatch,
+                            const std::vector<int>& cpuMapConsumers, const std::vector<int>& cpuMapProducers) {
     disruptor::BusySpinWaitStrategy waitStrategy;
     auto ringBuffer = disruptor::RingBuffer<ValueEvent>::createMultiProducer(
         [] { return ValueEvent{}; }, bufferSize, waitStrategy);
 
-    std::vector<std::unique_ptr<disruptor::Sequence>> consumerSequences;
+    disruptor::Sequence workSequence{disruptor::Sequence::INITIAL_VALUE};
+
+    std::vector<std::unique_ptr<SumWorkHandler>> handlers;
+    std::vector<std::unique_ptr<disruptor::WorkProcessor<ValueEvent>>> processors;
     std::vector<disruptor::Sequence*> gating;
-    consumerSequences.reserve(static_cast<size_t>(consumers));
+
+    handlers.reserve(static_cast<size_t>(consumers));
+    processors.reserve(static_cast<size_t>(consumers));
     gating.reserve(static_cast<size_t>(consumers));
-    for (int i = 0; i < consumers; ++i) {
-        consumerSequences.emplace_back(std::make_unique<disruptor::Sequence>(disruptor::Sequence::INITIAL_VALUE));
-        gating.push_back(consumerSequences.back().get());
+
+    for (int i = 0; i < consumers; ++i)
+    {
+        handlers.emplace_back(std::make_unique<SumWorkHandler>());
+        processors.emplace_back(std::make_unique<disruptor::WorkProcessor<ValueEvent>>(
+            ringBuffer, ringBuffer.newBarrier(), *handlers.back(), workSequence, totalMessages - 1, workBatchSize));
+        gating.push_back(&processors.back()->getSequence());
     }
+
     ringBuffer.addGatingSequences(gating);
 
     auto ranges = splitRanges(totalMessages, producers);
 
     std::atomic<int> ready{0};
     std::atomic<bool> start{false};
-    std::atomic<long long> sum{0};
 
     std::vector<std::thread> consumerThreads;
     consumerThreads.reserve(static_cast<size_t>(consumers));
-    for (int c = 0; c < consumers; ++c) {
+    for (int c = 0; c < consumers; ++c)
+    {
         consumerThreads.emplace_back([&, c] {
-            auto barrier = ringBuffer.newBarrier();
 #ifdef __linux__
-            if (!setAffinityStrict(cpuMapConsumers[static_cast<size_t>(c)])) {
+            if (!setAffinityStrict(cpuMapConsumers[static_cast<size_t>(c)]))
+            {
                 std::exit(3);
             }
 #endif
             ready.fetch_add(1, std::memory_order_release);
-            while (!start.load(std::memory_order_acquire)) {
+            while (!start.load(std::memory_order_acquire))
+            {
                 std::this_thread::yield();
             }
 
-            long long localSum = 0;
-            long next = 0;
-            while (next < totalMessages) {
-                long available = barrier.waitFor(next);
-                while (next <= available && next < totalMessages) {
-                    if ((next % consumers) == c) {
-                        localSum += ringBuffer.get(next).value;
-                    }
-                    ++next;
-                }
-                consumerSequences[static_cast<size_t>(c)]->set(next - 1);
-            }
-            sum.fetch_add(localSum, std::memory_order_relaxed);
+            processors[static_cast<size_t>(c)]->run();
         });
     }
 
     std::vector<std::thread> producerThreads;
     producerThreads.reserve(static_cast<size_t>(producers));
-    for (int p = 0; p < producers; ++p) {
+    for (int p = 0; p < producers; ++p)
+    {
         producerThreads.emplace_back([&, p] {
 #ifdef __linux__
-            if (!setAffinityStrict(cpuMapProducers[static_cast<size_t>(p)])) {
+            if (!setAffinityStrict(cpuMapProducers[static_cast<size_t>(p)]))
+            {
                 std::exit(3);
             }
 #endif
             ready.fetch_add(1, std::memory_order_release);
-            while (!start.load(std::memory_order_acquire)) {
+            while (!start.load(std::memory_order_acquire))
+            {
                 std::this_thread::yield();
             }
 
             auto r = ranges[static_cast<size_t>(p)];
-            for (long i = 0; i < r.count; ++i) {
-                long seq = ringBuffer.next();
-                ringBuffer.get(seq).value = r.start + i;
-                ringBuffer.publish(seq);
+
+            // Batch publish to reduce sequencer+signal overhead.
+            int batch = publishBatch;
+            if (batch < 1)
+            {
+                batch = 1;
+            }
+            if (batch > bufferSize)
+            {
+                batch = bufferSize;
+            }
+
+            long produced = 0;
+            while (produced < r.count)
+            {
+                int n = static_cast<int>(std::min<long>(batch, r.count - produced));
+                long hi = ringBuffer.next(n);
+                long lo = hi - n + 1;
+                for (int i = 0; i < n; ++i)
+                {
+                    ringBuffer.get(lo + i).value = r.start + produced + i;
+                }
+                ringBuffer.publish(lo, hi);
+                produced += n;
             }
         });
     }
 
-    while (ready.load(std::memory_order_acquire) < (producers + consumers)) {
+    while (ready.load(std::memory_order_acquire) < (producers + consumers))
+    {
         std::this_thread::yield();
     }
 
     auto t0 = std::chrono::steady_clock::now();
     start.store(true, std::memory_order_release);
 
-    for (auto& t : producerThreads) {
+    for (auto& t : producerThreads)
+    {
         t.join();
     }
-    for (auto& t : consumerThreads) {
+    for (auto& t : consumerThreads)
+    {
         t.join();
     }
     auto t1 = std::chrono::steady_clock::now();
+
+    long long sum = 0;
+    for (auto& h : handlers)
+    {
+        sum += h->sum;
+    }
 
     double seconds = std::chrono::duration<double>(t1 - t0).count();
     RunResult r;
     r.seconds = seconds;
     r.opsPerSecond = static_cast<double>(totalMessages) / seconds;
-    r.sum = sum.load(std::memory_order_relaxed);
+    r.sum = sum;
     return r;
 }
 
@@ -458,6 +502,8 @@ int main(int argc, char** argv) {
     long totalMessages = parseLong(argc > 3 ? argv[3] : nullptr, 10'000'000L);
     int bufferSize = static_cast<int>(parseLong(argc > 4 ? argv[4] : nullptr, 1 << 16));
     int baseCpu = static_cast<int>(parseLong(argc > 5 ? argv[5] : nullptr, 0));
+    int workBatchSize = static_cast<int>(parseLong(argc > 6 ? argv[6] : nullptr, 8));
+    int publishBatch = static_cast<int>(parseLong(argc > 7 ? argv[7] : nullptr, 1024));
 
 #ifdef __linux__
     auto cpus = enumerateCpus();
@@ -490,12 +536,14 @@ int main(int argc, char** argv) {
     }
 
     std::cout << "Benchmark: MPMC (each message consumed once)\n";
-    std::cout << "Disruptor-CPP consumer model: partition by (sequence % consumers)\n";
+    std::cout << "Disruptor-CPP consumer model: WorkProcessor (batch claim) work-queue\n";
     std::cout << "ConcurrentQueue consumer model: try_dequeue work-queue\n";
     std::cout << "Producers: " << producers << "\n";
     std::cout << "Consumers: " << consumers << "\n";
     std::cout << "Total messages: " << totalMessages << "\n";
     std::cout << "RingBuffer size (disruptor): " << bufferSize << "\n";
+    std::cout << "WorkProcessor claim batch: " << workBatchSize << "\n";
+    std::cout << "Producer publish batch: " << publishBatch << "\n";
     std::cout << "Pin mode: numa-local + physical-core-stride (strict)\n";
     std::cout << "Pinning: consumers ->";
     for (auto c : cpuMapConsumers) {
@@ -508,14 +556,14 @@ int main(int argc, char** argv) {
     std::cout << "\n\n";
 
     long warmupMessages = std::min<long>(200'000L, totalMessages);
-    (void)run_disruptor_mpmc(producers, consumers, warmupMessages, bufferSize, cpuMapConsumers, cpuMapProducers);
+    (void)run_disruptor_mpmc(producers, consumers, warmupMessages, bufferSize, workBatchSize, publishBatch, cpuMapConsumers, cpuMapProducers);
     (void)run_concurrentqueue_mpmc(producers, consumers, warmupMessages, cpuMapConsumers, cpuMapProducers);
 
-    auto d = run_disruptor_mpmc(producers, consumers, totalMessages, bufferSize, cpuMapConsumers, cpuMapProducers);
+    auto d = run_disruptor_mpmc(producers, consumers, totalMessages, bufferSize, workBatchSize, publishBatch, cpuMapConsumers, cpuMapProducers);
     auto q = run_concurrentqueue_mpmc(producers, consumers, totalMessages, cpuMapConsumers, cpuMapProducers);
 #else
     std::cout << "Benchmark: MPMC (each message consumed once)\n";
-    std::cout << "Disruptor-CPP consumer model: partition by (sequence % consumers)\n";
+    std::cout << "Disruptor-CPP consumer model: WorkProcessor (batch claim) work-queue\n";
     std::cout << "ConcurrentQueue consumer model: try_dequeue work-queue\n";
     std::cout << "Producers: " << producers << "\n";
     std::cout << "Consumers: " << consumers << "\n";
@@ -526,10 +574,10 @@ int main(int argc, char** argv) {
     std::vector<int> cpuMapProducers(static_cast<size_t>(producers), 0);
 
     long warmupMessages = std::min<long>(200'000L, totalMessages);
-    (void)run_disruptor_mpmc(producers, consumers, warmupMessages, bufferSize, cpuMapConsumers, cpuMapProducers);
+    (void)run_disruptor_mpmc(producers, consumers, warmupMessages, bufferSize, workBatchSize, publishBatch, cpuMapConsumers, cpuMapProducers);
     (void)run_concurrentqueue_mpmc(producers, consumers, warmupMessages, cpuMapConsumers, cpuMapProducers);
 
-    auto d = run_disruptor_mpmc(producers, consumers, totalMessages, bufferSize, cpuMapConsumers, cpuMapProducers);
+    auto d = run_disruptor_mpmc(producers, consumers, totalMessages, bufferSize, workBatchSize, publishBatch, cpuMapConsumers, cpuMapProducers);
     auto q = run_concurrentqueue_mpmc(producers, consumers, totalMessages, cpuMapConsumers, cpuMapProducers);
 #endif
 

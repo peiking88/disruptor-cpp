@@ -37,6 +37,7 @@ public:
     virtual ~Sequencer() = default;
     virtual int getBufferSize() const = 0;
     virtual Sequence& getCursor() = 0;
+    virtual Sequence& getPublishedCursor() = 0;
     virtual WaitStrategy& getWaitStrategy() = 0;
 
     virtual bool hasAvailableCapacity(int requiredCapacity) = 0;
@@ -65,6 +66,7 @@ public:
 
     int getBufferSize() const override { return bufferSize; }
     Sequence& getCursor() override { return cursor; }
+    Sequence& getPublishedCursor() override { return cursor; }
     WaitStrategy& getWaitStrategy() override { return waitStrategy; }
 
     void addGatingSequences(const std::vector<Sequence*>& sequences) override
@@ -363,10 +365,13 @@ public:
         return nextSequence;
     }
 
+    Sequence& getPublishedCursor() override { return publishedCursor; }
+
     void publish(long sequence) override
     {
         setAvailableBufferValue(calculateIndex(sequence), calculateAvailabilityFlag(sequence));
         std::atomic_thread_fence(std::memory_order_release);
+        tryAdvancePublishedCursor();
         waitStrategy.signalAllWhenBlocking();
     }
 
@@ -378,6 +383,7 @@ public:
             setAvailableBufferValue(calculateIndex(s), calculateAvailabilityFlag(s));
         }
         std::atomic_thread_fence(std::memory_order_release);
+        tryAdvancePublishedCursor();
         waitStrategy.signalAllWhenBlocking();
     }
 
@@ -435,7 +441,25 @@ private:
         return static_cast<int>(sequence) & indexMask;
     }
 
+    void tryAdvancePublishedCursor()
+    {
+        long current = publishedCursor.getRelaxed();
+        long next = current + 1;
+
+        while (isAvailable(next))
+        {
+            current = next;
+            ++next;
+        }
+
+        if (current > publishedCursor.getRelaxed())
+        {
+            publishedCursor.set(current);
+        }
+    }
+
     Sequence gatingSequenceCache{Sequence::INITIAL_VALUE};
+    Sequence publishedCursor{Sequence::INITIAL_VALUE};
     std::vector<std::atomic<int>> availableBuffer;  // Atomic slots to avoid data races
     int indexMask;
     int indexShift;

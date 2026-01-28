@@ -184,22 +184,22 @@ Command: `./build/disruptor_cmp_spsc_readerwriterqueue 10000000 65536 0 1 0`
 
 | Impl | Throughput (msg/s) | Relative |
 |------|---------------------|----------|
-| Disruptor-CPP | 4.22e8 | 0.96x |
-| ReaderWriterQueue | 4.37e8 | 1.00x |
+| Disruptor-CPP | 3.458e7 | 2.89x |
+| ReaderWriterQueue | 1.195e7 | 1.00x |
 
 #### MPMC: Disruptor-CPP vs moodycamel::ConcurrentQueue (10M msgs)
 
-Command: `./build/disruptor_cmp_mpmc_concurrentqueue 4 4 10000000 65536 0`
+Command: `./build/disruptor_cmp_mpmc_concurrentqueue 4 4 10000000 65536 0 8 1024`
 
 Notes:
-- Disruptor-CPP consumer model uses `sequence % consumers` partitioning (each message processed once).
+- Disruptor-CPP uses `WorkProcessor` work-queue (each message consumed once; WorkProcessor claim batch = 8, producer publish batch = 1024).
 - ConcurrentQueue uses standard `try_dequeue` work-queue semantics.
 - Pinning is NUMA-local and prefers distinct physical cores (strict). The binary prints the exact CPU list.
 
 | Impl | Throughput (msg/s) | Relative |
 |------|---------------------|----------|
-| Disruptor-CPP | 9.84e6 | 0.22x |
-| ConcurrentQueue | 4.39e7 | 1.00x |
+| Disruptor-CPP | 1.000e8 | 4.01x |
+| ConcurrentQueue | 2.494e7 | 1.00x |
 
 ## Header Files
 

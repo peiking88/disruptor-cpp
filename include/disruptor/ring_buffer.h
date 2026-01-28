@@ -80,8 +80,7 @@ public:
 
     SequenceBarrier newBarrier(const std::vector<Sequence*>& dependents = {})
     {
-        return SequenceBarrier(sequencer->getWaitStrategy(), sequencer->getCursor(), dependents,
-                               sequencer.get());
+        return SequenceBarrier(sequencer->getWaitStrategy(), sequencer->getPublishedCursor(), dependents);
     }
 
     void addGatingSequences(const std::vector<Sequence*>& sequences)
