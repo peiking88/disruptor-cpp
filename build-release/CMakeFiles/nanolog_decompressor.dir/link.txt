@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/nanolog_decompressor.dir/link.d CMakeFiles/nanolog_decompressor.dir/external/NanoLog/runtime/LogDecompressor.cc.o -o nanolog_decompressor  libnanolog.a -lrt -lpthread
