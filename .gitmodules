@@ -10,3 +10,9 @@
 [submodule "external/nanobench"]
 	path = external/nanobench
 	url = https://bgithub.xyz/martinus/nanobench
+[submodule "external/concurrentqueue"]
+	path = external/concurrentqueue
+	url = https://bgithub.xyz/cameron314/concurrentqueue
+[submodule "external/readerwriterqueue"]
+	path = external/readerwriterqueue
+	url = https://bgithub.xyz/cameron314/readerwriterqueue

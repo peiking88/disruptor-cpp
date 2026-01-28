@@ -174,6 +174,33 @@ auto rb = RingBuffer<Event>::createMultiProducer(factory, 65536, waitStrategy);
 | Latency P50 | 90 ns | 2,757 ns | **C++ 31x faster** |
 | Latency P99 | 150 ns | 7,925 ns | **C++ 53x faster** |
 
+### vs moodycamel queues
+
+*Measured on Linux (Release build), fixed CPU pinning, with a short warmup run.*
+
+#### SPSC: Disruptor-CPP vs moodycamel::ReaderWriterQueue (10M msgs)
+
+Command: `./build/disruptor_cmp_spsc_readerwriterqueue 10000000 65536 0 1 0`
+
+| Impl | Throughput (msg/s) | Relative |
+|------|---------------------|----------|
+| Disruptor-CPP | 4.22e8 | 0.96x |
+| ReaderWriterQueue | 4.37e8 | 1.00x |
+
+#### MPMC: Disruptor-CPP vs moodycamel::ConcurrentQueue (10M msgs)
+
+Command: `./build/disruptor_cmp_mpmc_concurrentqueue 4 4 10000000 65536 0`
+
+Notes:
+- Disruptor-CPP consumer model uses `sequence % consumers` partitioning (each message processed once).
+- ConcurrentQueue uses standard `try_dequeue` work-queue semantics.
+- Pinning is NUMA-local and prefers distinct physical cores (strict). The binary prints the exact CPU list.
+
+| Impl | Throughput (msg/s) | Relative |
+|------|---------------------|----------|
+| Disruptor-CPP | 9.84e6 | 0.22x |
+| ConcurrentQueue | 4.39e7 | 1.00x |
+
 ## Header Files
 
 | File | Description |

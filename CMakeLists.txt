@@ -14,6 +14,8 @@ endif()
 add_library(disruptor INTERFACE)
 
 add_subdirectory(external/backward-cpp EXCLUDE_FROM_ALL)
+add_subdirectory(external/concurrentqueue EXCLUDE_FROM_ALL)
+add_subdirectory(external/readerwriterqueue EXCLUDE_FROM_ALL)
 
 add_library(nanolog STATIC
   external/NanoLog/runtime/Cycles.cc
@@ -87,6 +89,8 @@ if (DISRUPTOR_BUILD_BENCHMARKS)
   add_executable(disruptor_benchmark_deep benchmarks/benchmark_deep_analysis.cpp)
   add_executable(disruptor_perf_batch_throughput benchmarks/perftest_batch_throughput.cpp)
   add_executable(disruptor_perf_nanobench benchmarks/perftest_nanobench.cpp)
+  add_executable(disruptor_cmp_mpmc_concurrentqueue benchmarks/compare_mpmc_concurrentqueue.cpp)
+  add_executable(disruptor_cmp_spsc_readerwriterqueue benchmarks/compare_spsc_readerwriterqueue.cpp)
 
   target_link_libraries(disruptor_benchmark PRIVATE disruptor)
   target_link_libraries(disruptor_jmh_spsc PRIVATE disruptor)
@@ -106,4 +110,6 @@ if (DISRUPTOR_BUILD_BENCHMARKS)
   target_link_libraries(disruptor_benchmark_deep PRIVATE disruptor)
   target_link_libraries(disruptor_perf_batch_throughput PRIVATE disruptor)
   target_link_libraries(disruptor_perf_nanobench PRIVATE disruptor)
+  target_link_libraries(disruptor_cmp_mpmc_concurrentqueue PRIVATE disruptor concurrentqueue)
+  target_link_libraries(disruptor_cmp_spsc_readerwriterqueue PRIVATE disruptor readerwriterqueue)
 endif()
