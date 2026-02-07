@@ -26,9 +26,13 @@ cmake --build build -j$(nproc)
 ### Run Tests & Benchmarks
 
 ```bash
-./build/disruptor_tests              # 101 test cases, 252 assertions
-./build/disruptor_perf_one_to_one    # Basic throughput test
-./build/disruptor_perf_ping_pong     # Latency test
+./build/disruptor_tests                     # 101 test cases, 252 assertions
+./build/disruptor_perf_one_to_one           # Basic throughput test
+./build/disruptor_perf_ping_pong            # Latency test
+./build/bench_spsc_direct_compare           # SPSCQueue vs ReaderWriterQueue
+./build/bench_mpmc_direct_compare           # MPMCQueue vs ConcurrentQueue
+./build/disruptor_cmp_spsc_readerwriterqueue # Disruptor vs ReaderWriterQueue
+./build/disruptor_cmp_mpmc_concurrentqueue   # Disruptor vs ConcurrentQueue
 ```
 
 ## Build Guide
@@ -201,6 +205,32 @@ Notes:
 | ConcurrentQueue | 4.52e7 | **24x** |
 | Disruptor-CPP | 1.89e6 | 1.00x |
 
+### Direct Queue Comparisons
+
+We also provide direct comparisons between equivalent queue implementations:
+
+#### SPSCQueue vs ReaderWriterQueue
+
+Command: `./build/bench_spsc_direct_compare [iterations] [capacity] [consumerCpu] [producerCpu]`
+
+| Queue | Throughput (msg/s) | Notes |
+|-------|-------------------|-------|
+| SPSCQueue (rigtorp) | ~44M | Fixed capacity, cache-line per slot |
+| ReaderWriterQueue (moodycamel) | ~10M | Dynamic block allocation |
+
+**Result**: SPSCQueue is ~4x faster in SPSC scenarios due to simpler design and better cache isolation.
+
+#### MPMCQueue vs ConcurrentQueue
+
+Command: `./build/bench_mpmc_direct_compare [producers] [consumers] [messages] [capacity] [baseCpu]`
+
+| Queue | Throughput (msg/s) | Notes |
+|-------|-------------------|-------|
+| MPMCQueue (rigtorp) | ~20M | Fixed capacity, turn-based synchronization |
+| ConcurrentQueue (moodycamel) | ~30M | Dynamic growth, per-thread tokens |
+
+**Result**: ConcurrentQueue scales better in MPMC scenarios due to producer-consumer separation and block-based allocation.
+
 ## Header Files
 
 | File | Description |
@@ -226,6 +256,8 @@ All dependencies are managed as Git submodules under `external/`:
 | [nanobench](https://github.com/martinus/nanobench) | Microbenchmarking | MIT |
 | [concurrentqueue](https://github.com/cameron314/concurrentqueue) | MPMC queue (benchmark comparison) | BSD |
 | [readerwriterqueue](https://github.com/cameron314/readerwriterqueue) | SPSC queue (benchmark comparison) | BSD |
+| [MPMCQueue](https://github.com/rigtorp/MPMCQueue) | MPMC queue (benchmark comparison) | MIT |
+| [SPSCQueue](https://github.com/rigtorp/SPSCQueue) | SPSC queue (benchmark comparison) | MIT |
 
 To fetch all dependencies:
 ```bash

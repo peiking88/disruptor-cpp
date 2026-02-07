@@ -16,3 +16,9 @@
 [submodule "external/readerwriterqueue"]
 	path = external/readerwriterqueue
 	url = https://bgithub.xyz/cameron314/readerwriterqueue
+[submodule "external/MPMCQueue"]
+	path = external/MPMCQueue
+	url = https://bgithub.xyz/rigtorp/MPMCQueue.git
+[submodule "external/SPSCQueue"]
+	path = external/SPSCQueue
+	url = https://bgithub.xyz/rigtorp/SPSCQueue.git

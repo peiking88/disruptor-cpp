@@ -96,6 +96,10 @@ if (DISRUPTOR_BUILD_BENCHMARKS)
   add_executable(disruptor_cmp_mpmc_concurrentqueue benchmarks/compare_mpmc_concurrentqueue.cpp)
   add_executable(disruptor_cmp_spsc_readerwriterqueue benchmarks/compare_spsc_readerwriterqueue.cpp)
 
+  # Direct queue-to-queue comparison benchmarks
+  add_executable(bench_spsc_direct_compare benchmarks/bench_spsc_direct_compare.cpp)
+  add_executable(bench_mpmc_direct_compare benchmarks/bench_mpmc_direct_compare.cpp)
+
   target_link_libraries(disruptor_benchmark PRIVATE disruptor)
   target_link_libraries(disruptor_jmh_spsc PRIVATE disruptor)
   target_link_libraries(disruptor_jmh_mpsc PRIVATE disruptor)
@@ -116,4 +120,12 @@ if (DISRUPTOR_BUILD_BENCHMARKS)
   target_link_libraries(disruptor_perf_nanobench PRIVATE disruptor)
   target_link_libraries(disruptor_cmp_mpmc_concurrentqueue PRIVATE disruptor concurrentqueue)
   target_link_libraries(disruptor_cmp_spsc_readerwriterqueue PRIVATE disruptor readerwriterqueue)
+  target_include_directories(bench_spsc_direct_compare PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/SPSCQueue/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/readerwriterqueue
+  )
+  target_include_directories(bench_mpmc_direct_compare PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/MPMCQueue/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/concurrentqueue
+  )
 endif()
